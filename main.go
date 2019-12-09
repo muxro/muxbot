@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -9,9 +10,16 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-var token = ""
-
 func main() {
+	tokenPtr := flag.String("token", "none", "Specify the token")
+	flag.Parse()
+	token := *tokenPtr
+
+	if token == "none" {
+		fmt.Println("You need to specify a token")
+		return
+	}
+
 	dg, err := discordgo.New("Bot " + token)
 	if err != nil {
 		fmt.Println("Could not create Discord session: ", err)
