@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
+
+	"github.com/Knetic/govaluate"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -54,6 +57,38 @@ func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate)
 		return
 	}
 
+	// It is a command
+	if strings.HasPrefix(message.Content, ".") {
+		commandMessage := strings.Join(strings.Split(message.Content, " ")[1:], " ")
+
+		if strings.HasPrefix(message.Content, ".help") {
+			sendMessageInChannel(`
+.help - shows this
+.ping - pong
+.echo - echoes back whatever you send it
+.calc - compute simple expression
+			`, session, message.ChannelID)
+		} else if strings.HasPrefix(message.Content, ".ping") {
+			sendMessageInChannel("pong", session, message.ChannelID)
+		} else if strings.HasPrefix(message.Content, ".echo") {
+
+			if commandMessage != "" {
+				sendMessageInChannel(commandMessage, session, message.ChannelID)
+			}
+		} else if strings.HasPrefix(message.Content, ".calc") {
+			expr, err := govaluate.NewEvaluableExpression(commandMessage)
+			if err != nil {
+				sendMessageInChannel(fmt.Sprintf("Nu am putut calcula: Eroare %v", err), session, message.ChannelID)
+				return
+			}
+			result, err := expr.Evaluate(nil)
+			if err != nil {
+				sendMessageInChannel(fmt.Sprintf("Nu am putut calcula, eroare %v", err), session, message.ChannelID)
+			}
+			sendMessageInChannel(fmt.Sprintf("%v", result), session, message.ChannelID)
+		}
+	}
+
 }
 
 func sendEmbedInChannel(embed *discordgo.MessageEmbed, session *discordgo.Session, channel string) {
@@ -62,8 +97,13 @@ func sendEmbedInChannel(embed *discordgo.MessageEmbed, session *discordgo.Sessio
 		fmt.Println(err)
 		return
 	}
+
 }
 
 func sendMessageInChannel(message string, session *discordgo.Session, channel string) {
 	session.ChannelMessageSend(channel, message)
+}
+
+func typeof(v interface{}) string {
+	return fmt.Sprintf("%T", v)
 }
