@@ -97,7 +97,7 @@ func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate)
 	if strings.HasPrefix(message.Content, *prefix) {
 		commandMessage := strings.Join(strings.Split(message.Content, " ")[1:], " ")
 		if startsCommand(message.Content, "help") {
-			sendReply("Head over to https://gitlab.com/muxro/muxbot/commands.md for information regarding available commands.")
+			sendReply("Head over to https://gitlab.com/muxro/muxbot/blob/master/commands.md for information regarding available commands.")
 
 		} else if startsCommand(message.Content, "g ") {
 			res, err := scrapeFirstWebRes(commandMessage)
