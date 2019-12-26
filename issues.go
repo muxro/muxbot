@@ -9,6 +9,37 @@ import (
 	"github.com/xanzy/go-gitlab"
 )
 
+// IssueMsgOptions stores data about the rendering of the list
+type IssueMsgOptions struct {
+	ShowGroup    bool
+	ShowRepo     bool
+	ShowTags     bool
+	ShowAuthor   bool
+	ShowAssignee bool
+}
+
+// IssuesListOptions stores data about the issues
+type IssuesListOptions struct {
+	Group      string
+	Repo       string
+	Author     string
+	Assignee   string
+	Tags       []string
+	Title      string
+	InternalID int
+	URL        string
+}
+
+// IssuesSearchOptions stores data about the searching of issues
+type IssuesSearchOptions struct {
+	Group    string
+	Repo     string
+	Author   string
+	Assignee string
+	Tags     []string
+	Self     bool
+}
+
 func handleIssue(session *discordgo.Session, message *discordgo.Message) {
 	sendMessage := func(sentMsg string) *discordgo.Message {
 		resulting, _ := session.ChannelMessageSend(message.ChannelID, sentMsg)
