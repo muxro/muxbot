@@ -33,7 +33,7 @@ func issueAddHandler(git *gitlab.Client, projects []*gitlab.Project, session *di
 		return
 	}
 	if len(params) < 3 {
-		sendReply("Usage: " + *prefix + "issues add <issue opts>")
+		sendReply("Usage: " + *prefix + "issues add <title> <issue opts> <description>")
 		return
 	}
 	opts, strErr := parseAddOpts(params[1:], projects, git)
