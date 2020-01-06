@@ -35,8 +35,14 @@
             - `$assignee`: issues need to have been assigned to this assignee name.
                 - exception: `$self` sets the assignee to the user if they have an associated gitlab key. If they don't, the command returns an error. 
             - `+tag`: adds tags that must be associated to the issue.
-            - anything else is treated as *the* repositories to search in. If you have multiple repos listed, it searches the last one entered.
-    - `.issues add` adds an issue with the title being the text coming after it. It is planned to support assignees and tags with `issues list`-like syntax, but we haven't decided on how descriptions should be handled.
+            - `&project`: issues need to be in this project.
+    - `.issues add` adds an issue with the title being the text coming after it.
+        - Usage: `.issues add <issue name> <params> <issue description>`
+        - Params:
+            - `$assignee`: issue is assigned to user.
+            - `+tag`: issues will have this tag.
+            - `&project`: issue is added to this project. If not set, it will be set to the active repository.
+
     - `.issues activeRepo` is a command used for setting the repository that the user is working on.
         - Usage: `.issues activeRepo <get/set/erase>`
         - `.issues activeRepo get` displays the active repository for the user that requested the command

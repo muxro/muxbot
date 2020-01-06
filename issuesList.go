@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -173,7 +172,7 @@ func parseListOpts(params []string, projects []*gitlab.Project) (IssuesSearchOpt
 				msgOptions.ShowGroup = true
 				msgOptions.ShowRepo = true
 				ret.Any = true
-			} else if strings.Contains(param, "/") {
+			} else if strings.Contains(param, "/") && isRepo(param, projects) {
 				msgOptions.ShowRepo = false
 				repoName := strings.Split(param[1:], "/")
 				ret.Group = repoName[0]
@@ -189,6 +188,5 @@ func parseListOpts(params []string, projects []*gitlab.Project) (IssuesSearchOpt
 		}
 
 	}
-	fmt.Printf("%#v %#v\n", ret, msgOptions)
 	return ret, msgOptions
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -82,6 +83,15 @@ func getIssueProject(issue *gitlab.Issue) (*gitlab.Project, error) {
 	return project, err
 }
 
+func getRepo(name string, projects []*gitlab.Project) *gitlab.Project {
+	for _, project := range projects {
+		if isSameRepo(name, project) {
+			return project
+		}
+	}
+	return nil
+}
+
 func isRepo(name string, projects []*gitlab.Project) bool {
 	name = strings.ToLower(name)
 	for _, project := range projects {
@@ -93,6 +103,7 @@ func isRepo(name string, projects []*gitlab.Project) bool {
 }
 
 func isSameRepo(name string, project *gitlab.Project) bool {
+	name = strings.ToLower(name)
 	if project.Path == name ||
 		project.Name == name ||
 		project.Namespace.Name+"/"+project.Path == name ||
@@ -123,4 +134,18 @@ func glKeyHandler(session *discordgo.Session, message *discordgo.MessageCreate, 
 	} else {
 		sendReply("Invalid key")
 	}
+}
+
+func getUserFromName(username string, git *gitlab.Client) (*gitlab.User, error) {
+	users, _, err := git.Users.ListUsers(&gitlab.ListUsersOptions{Username: gitlab.String(username)})
+	if err != nil {
+		fmt.Printf("%#v\n", err)
+		return nil, err
+	}
+	if len(users) < 1 {
+		fmt.Printf("No user found\n")
+		return nil, nil
+	}
+	fmt.Printf("%#v\n", users[0])
+	return users[0], nil
 }
