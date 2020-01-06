@@ -63,28 +63,9 @@ func issueAddHandler(git *gitlab.Client, projects []*gitlab.Project, session *di
 		sendError(err)
 	}
 	sendEmbed(&discordgo.MessageEmbed{Description: fmt.Sprintf("Created issue [#%d %s](%s)", issue.IID, issue.Title, issue.Links.Self)})
-	// ok := false
-	// for _, project := range projects {
-	// 	if isSameRepo(params[1], project) {
-	// 		ok = true
-	// 		issueName := strings.Join(params[2:], " ")
-	// 		userGit := gitlab.NewClient(nil, asTok)
-	// 		_, _, err := userGit.Issues.CreateIssue(project.ID, &gitlab.CreateIssueOptions{Title: gitlab.String(issueName)})
-	// 		if err != nil {
-	// 			sendError(err)
-	// 			return
-	// 		}
-	// 		sendReply("Issue adaugat")
-	// 		break
-	// 	}
-	// }
-	// if ok == false {
-	// 	sendReply("Error: No project found")
-	// }
 }
 
 func parseAddOpts(params []string, projects []*gitlab.Project, git *gitlab.Client) (IssuesAddOptions, string) {
-	// TODO
 	ret := IssuesAddOptions{}
 	if len(params) < 1 {
 		return ret, ""
