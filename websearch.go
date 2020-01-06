@@ -92,5 +92,5 @@ func getFirstYTResult(q string) (string, error) {
 		return url, nil
 	}
 
-	return "Eroare: S-a stricat ceva", nil
+	return "Error: Something broke", nil
 }

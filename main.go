@@ -9,16 +9,22 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/Knetic/govaluate"
-
 	"github.com/bwmarrin/discordgo"
 	_ "github.com/mattn/go-sqlite3"
 )
 
-var token = flag.String("token", "none", "Specify the token")
-var googleDevKey = flag.String("gkey", "none", "Specify the google dev key")
-var gitlabToken = flag.String("glt", "none", "Specify the Gitlab Token")
-var prefix = flag.String("prefix", ".", "Specify the bot prefix")
+type messageSender func(message string) *discordgo.Message
+type errorSender func(err error) *discordgo.Message
+type cmd func(session *discordgo.Session, message *discordgo.MessageCreate, sendReply messageSender, sendMessage messageSender, sendError errorSender)
+
+var (
+	token        = flag.String("token", "none", "Specify the token")
+	googleDevKey = flag.String("gkey", "none", "Specify the google dev key")
+	gitlabToken  = flag.String("glt", "none", "Specify the Gitlab Token")
+
+	prefix   = flag.String("prefix", ".", "Specify the bot prefix")
+	commands = make(map[string]cmd)
+)
 
 func main() {
 	flag.Parse()
@@ -57,6 +63,18 @@ func main() {
 	dg.AddHandler(ready)
 	dg.AddHandler(messageCreate)
 
+	// register commands
+	registerCommand("help", helpHandler)
+	registerCommand("ping", pingHandler)
+	registerCommand("echo", echoHandler)
+	registerCommand("eval", evalHandler)
+	registerCommand("g", gHandler)
+	registerCommand("gis", gisHandler)
+	registerCommand("glkey", glKeyHandler)
+	registerCommand("yt", ytHandler)
+	registerCommand("todo", todoHandler)
+	registerCommand("issues", issueHandler)
+
 	err = dg.Open()
 	if err != nil {
 		log.Fatal(err)
@@ -80,102 +98,34 @@ func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate)
 		return
 	}
 
-	sendMessage := func(sentMsg string) *discordgo.Message {
+	sendMessage, sendReply, sendError := initMessageSenders(session, message)
+
+	// It is a command
+	if strings.HasPrefix(message.Content, *prefix) {
+		command := strings.Split(strings.TrimPrefix(message.Content, *prefix), " ")[0]
+		if cmdHandler, ok := commands[command]; ok {
+			cmdHandler(session, message, sendReply, sendMessage, sendError)
+		}
+	}
+}
+
+func registerCommand(name string, handler cmd) {
+	commands[name] = handler
+}
+
+func initMessageSenders(session *discordgo.Session, message *discordgo.MessageCreate) (sendMessage messageSender, sendReply messageSender, sendError errorSender) {
+	sendMessage = func(sentMsg string) *discordgo.Message {
 		resulting, _ := session.ChannelMessageSend(message.ChannelID, sentMsg)
 		return resulting
 	}
 
-	sendReply := func(sentMsg string) *discordgo.Message {
+	sendReply = func(sentMsg string) *discordgo.Message {
 		return sendMessage(fmt.Sprintf("(%s) %s", strings.Split(message.Author.String(), "#")[0], sentMsg))
 	}
 
-	sendError := func(err error) *discordgo.Message {
+	sendError = func(err error) *discordgo.Message {
 		return sendReply(fmt.Sprintf("Eroare: %v", err))
 	}
 
-	// It is a command
-	if strings.HasPrefix(message.Content, *prefix) {
-		commandMessage := strings.Join(strings.Split(message.Content, " ")[1:], " ")
-		if startsCommand(message.Content, "help") {
-			sendReply("Head over to https://gitlab.com/muxro/muxbot/blob/master/commands.md for information regarding available commands.")
-
-		} else if startsCommand(message.Content, "g ") {
-			res, err := scrapeFirstWebRes(commandMessage)
-			if err != nil {
-				sendError(err)
-				return
-			}
-			sendReply(fmt.Sprintf("%s -- %s", res["url"], res["desc"]))
-
-		} else if startsCommand(message.Content, "gis ") {
-			res, err := scrapeFirstImgRes(commandMessage)
-			if err != nil {
-				sendError(err)
-				return
-			}
-			sendReply(res)
-
-		} else if startsCommand(message.Content, "yt") {
-			res, err := getFirstYTResult(commandMessage)
-			if err != nil {
-				sendError(err)
-				return
-			}
-			sendReply(res)
-
-		} else if startsCommand(message.Content, "ping") {
-			sendReply("pong")
-
-		} else if startsCommand(message.Content, "echo") {
-			if commandMessage != "" {
-				sendReply(commandMessage)
-			}
-
-		} else if startsCommand(message.Content, "eval") {
-			expr, err := govaluate.NewEvaluableExpression(commandMessage)
-			if err != nil {
-				sendError(err)
-				return
-			}
-			result, err := expr.Evaluate(nil)
-			if err != nil {
-
-				sendError(err)
-				return
-			}
-			sendReply(fmt.Sprintf("%v", result))
-
-		} else if startsCommand(message.Content, "todo") {
-			handleTodo(session, message.Message)
-
-		} else if startsCommand(message.Content, "issues") {
-			handleIssue(session, message.Message)
-
-		} else if startsCommand(message.Content, "glkey") {
-			key := commandMessage
-			err := session.ChannelMessageDelete(message.ChannelID, message.ID)
-			if err != nil {
-				sendError(err)
-				return
-			}
-			result, ok := testKey(key)
-			if ok == true {
-				err := associateUserToToken(message.Author.ID, key)
-
-				if err != nil {
-					sendError(err)
-					return
-				}
-				sendReply("Associated user with gitlab user " + result.Name)
-			} else {
-				sendReply("Invalid key")
-			}
-
-		}
-	}
-
-}
-
-func startsCommand(content string, command string) bool {
-	return strings.HasPrefix(content, fmt.Sprintf("%s%s", *prefix, command))
+	return
 }

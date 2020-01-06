@@ -20,19 +20,7 @@ type Todo struct {
 	completed bool
 }
 
-func handleTodo(session *discordgo.Session, message *discordgo.Message) {
-	sendMessage := func(sentMsg string) *discordgo.Message {
-		resulting, _ := session.ChannelMessageSend(message.ChannelID, sentMsg)
-		return resulting
-	}
-
-	sendReply := func(sentMsg string) *discordgo.Message {
-		return sendMessage(fmt.Sprintf("(%s) %s", strings.Split(message.Author.String(), "#")[0], sentMsg))
-	}
-
-	sendError := func(err error) *discordgo.Message {
-		return sendReply(fmt.Sprintf("Eroare: %v", err))
-	}
+func todoHandler(session *discordgo.Session, message *discordgo.MessageCreate, sendReply messageSender, sendMessage messageSender, sendError errorSender) {
 	params := strings.Split(message.Content, " ")[1:]
 
 	pinnedMessages, err := session.ChannelMessagesPinned(message.ChannelID)
@@ -42,7 +30,7 @@ func handleTodo(session *discordgo.Session, message *discordgo.Message) {
 	}
 	todoPin := &discordgo.Message{}
 	if len(pinnedMessages) < 1 || pinnedMessages[0].Author.ID != session.State.User.ID {
-		sendReply("Primul mesaj pinned nu e al botului, rezolvam asta...")
+		sendReply("The first pinned message wasn't made by the bot, we're fixing that...")
 		result := sendMessage("TODOS:")
 		err := session.ChannelMessagePin(message.ChannelID, result.ID)
 		todoPin = result
