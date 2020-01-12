@@ -68,3 +68,7 @@ func ytHandler(session *discordgo.Session, message *discordgo.MessageCreate, sen
 	}
 	sendReply(res)
 }
+
+func nonExistentHandler(session *discordgo.Session, message *discordgo.MessageCreate, sendReply messageSender, sendMessage messageSender, sendError errorSender) {
+	sendReply("This command has been disabled because the bot maintainer didn't specify the required key")
+}

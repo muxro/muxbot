@@ -42,6 +42,19 @@
             - `$assignee`: issue is assigned to user.
             - `+tag`: issues will have this tag.
             - `&project`: issue is added to this project. If not set, it will be set to the active repository.
+    
+    - `.issues close` closes a specified issue and returns an error if it couldn't close it
+        - Usage `.issues close <issue id>`
+        - Params:
+            - `issue id`: it's in the form `repo#id`, but if you wish to use your active repo you can leave the `repo#` part out
+
+    - `.issues modify` updates an issue
+        - Usage `.issues modify <issue id> <params>`
+        - Params:
+            - `<issue id>`: it's in the form `repo#id`, but if you wish to use your active repo you can leave the `repo#` part out
+            - `$assignee`: updates the assignee
+            - `+tag`: adds the specified tag
+            - `-tag`: removes the specified tag (if it doesn't exist it isn't a problem)
 
     - `.issues activeRepo` is a command used for setting the repository that the user is working on.
         - Usage: `.issues activeRepo <get/set/erase>`

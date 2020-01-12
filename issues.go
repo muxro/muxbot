@@ -9,7 +9,6 @@ import (
 )
 
 func issueHandler(session *discordgo.Session, message *discordgo.MessageCreate, sendReply messageSender, sendMessage messageSender, sendError errorSender) {
-
 	git := gitlab.NewClient(nil, *gitlabToken)
 	opt := &gitlab.ListProjectsOptions{Membership: gitlab.Bool(true)}
 	params := strings.Split(message.Content, " ")[1:]
@@ -72,6 +71,10 @@ func issueHandler(session *discordgo.Session, message *discordgo.MessageCreate, 
 		default:
 			sendReply("Usage: " + *prefix + "issues activeRepo <set/get/erase>")
 		}
+	case "modify":
+		issueModifyHandler(git, projects, session, message)
+	case "close":
+		issueCloseHandler(git, projects, session, message)
 	default:
 		sendReply("Refer to " + *prefix + "help for a list of commands")
 	}
@@ -119,8 +122,7 @@ func glKeyHandler(session *discordgo.Session, message *discordgo.MessageCreate, 
 	key := strings.Join(strings.Split(message.Content, " ")[1:], " ")
 	err := session.ChannelMessageDelete(message.ChannelID, message.ID)
 	if err != nil {
-		sendError(err)
-		return
+		sendReply("Beware, I can't delete the message, keep the key safe")
 	}
 	result, ok := testKey(key)
 	if ok == true {

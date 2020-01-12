@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"strings"
@@ -29,24 +28,20 @@ var (
 func main() {
 	flag.Parse()
 
-	envVal, exists := os.LookupEnv("token")
-	if exists {
-		*token = envVal
+	getEnvVar("token", &token)
+	getEnvVar("gkey", &googleDevKey)
+	getEnvVar("glt", &gitlabToken)
+
+	if *token == "none" {
+		panic("No discord token specified, can't run the bot without it.")
 	}
 
-	envVal, exists = os.LookupEnv("gkey")
-	if exists {
-		*googleDevKey = envVal
+	if *googleDevKey == "none" {
+		fmt.Println("No google dev key specified, `yt` command will be disabled.")
 	}
 
-	envVal, exists = os.LookupEnv("glt")
-	if exists {
-		*gitlabToken = envVal
-	}
-
-	if *token == "none" || *googleDevKey == "none" || *gitlabToken == "none" {
-		fmt.Println("You need to specify a token, google dev and gitlab key")
-		return
+	if *gitlabToken == "none" {
+		fmt.Println("No gitlab token specified, the `issues` and `glkey` commands will be disabled.")
 	}
 
 	dg, err := discordgo.New("Bot " + *token)
@@ -57,7 +52,7 @@ func main() {
 
 	err = initDB()
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 
 	dg.AddHandler(ready)
@@ -70,14 +65,23 @@ func main() {
 	registerCommand("eval", evalHandler)
 	registerCommand("g", gHandler)
 	registerCommand("gis", gisHandler)
-	registerCommand("glkey", glKeyHandler)
-	registerCommand("yt", ytHandler)
+	if *googleDevKey != "none" {
+		registerCommand("yt", ytHandler)
+	} else {
+		registerCommand("yt", nonExistentHandler)
+	}
 	registerCommand("todo", todoHandler)
-	registerCommand("issues", issueHandler)
+	if *gitlabToken != "none" {
+		registerCommand("issues", issueHandler)
+		registerCommand("glkey", glKeyHandler)
+	} else {
+		registerCommand("issues", nonExistentHandler)
+		registerCommand("glkey", nonExistentHandler)
+	}
 
 	err = dg.Open()
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	defer dg.Close()
 
@@ -128,4 +132,11 @@ func initMessageSenders(session *discordgo.Session, message *discordgo.MessageCr
 	}
 
 	return
+}
+
+func getEnvVar(name string, variable **string) {
+	envVal, exists := os.LookupEnv(name)
+	if exists {
+		**variable = envVal
+	}
 }

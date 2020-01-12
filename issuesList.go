@@ -50,7 +50,7 @@ func issueListHandler(git *gitlab.Client, projects []*gitlab.Project, session *d
 
 	params := strings.Split(message.Content, " ")[1:]
 
-	searchOpts, msgOpts := parseListOpts(params[1:], projects)
+	searchOpts, msgOpts := parseListOpts(params[1:], projects, message.Author.ID)
 	issueList := []IssuesListOptions{}
 	if searchOpts.Self == true {
 		selfUname, err := getGitlabUnameFromUser(message.Author.ID)
@@ -83,22 +83,24 @@ func issueListHandler(git *gitlab.Client, projects []*gitlab.Project, session *d
 					return
 				}
 				for _, issue := range issues {
-					if searchOpts.Author == "" || issue.Author.Name == searchOpts.Author {
-						if (searchOpts.Assignee == "") ||
-							(issue.Assignee != nil && issue.Assignee.Name == searchOpts.Assignee) {
+					if issue.ClosedAt == nil {
+						if searchOpts.Author == "" || issue.Author.Name == searchOpts.Author {
+							if (searchOpts.Assignee == "") ||
+								(issue.Assignee != nil && issue.Assignee.Name == searchOpts.Assignee) {
 
-							assignee := ""
-							if issue.Assignee != nil {
-								assignee = issue.Assignee.Name
+								assignee := ""
+								if issue.Assignee != nil {
+									assignee = issue.Assignee.Name
+								}
+								issueList = append(issueList, IssuesListOptions{Group: project.Namespace.Path,
+									Repo:       project.Name,
+									Author:     issue.Author.Name,
+									Assignee:   assignee,
+									Tags:       issue.Labels,
+									Title:      issue.Title,
+									InternalID: issue.IID,
+									URL:        issue.WebURL})
 							}
-							issueList = append(issueList, IssuesListOptions{Group: project.Namespace.Path,
-								Repo:       project.Name,
-								Author:     issue.Author.Name,
-								Assignee:   assignee,
-								Tags:       issue.Labels,
-								Title:      issue.Title,
-								InternalID: issue.IID,
-								URL:        issue.WebURL})
 						}
 					}
 				}
@@ -144,7 +146,7 @@ func issueListHandler(git *gitlab.Client, projects []*gitlab.Project, session *d
 	}
 }
 
-func parseListOpts(params []string, projects []*gitlab.Project) (IssuesSearchOptions, IssueMsgOptions) {
+func parseListOpts(params []string, projects []*gitlab.Project, authorID string) (IssuesSearchOptions, IssueMsgOptions) {
 	ret := IssuesSearchOptions{}
 	msgOptions := IssueMsgOptions{ShowGroup: true, ShowAuthor: true, ShowRepo: true, ShowTags: true, ShowAssignee: true}
 	if len(params) < 1 { // It's empty
@@ -159,6 +161,8 @@ func parseListOpts(params []string, projects []*gitlab.Project) (IssuesSearchOpt
 				msgOptions.ShowAuthor = false
 			} else if param == "$self" {
 				ret.Self = true
+				assignee, _ := getGitlabUnameFromUser(authorID)
+				ret.Assignee = assignee
 			} else {
 				ret.Assignee = param[1:]
 			}
@@ -172,7 +176,7 @@ func parseListOpts(params []string, projects []*gitlab.Project) (IssuesSearchOpt
 				msgOptions.ShowGroup = true
 				msgOptions.ShowRepo = true
 				ret.Any = true
-			} else if strings.Contains(param, "/") && isRepo(param, projects) {
+			} else if strings.Contains(param, "/") && isRepo(param[1:], projects) {
 				msgOptions.ShowRepo = false
 				repoName := strings.Split(param[1:], "/")
 				ret.Group = repoName[0]
