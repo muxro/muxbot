@@ -51,6 +51,13 @@ func issueAddHandler(git *gitlab.Client, projects []*gitlab.Project, session *di
 			return
 		}
 	}
+	if opts.Title == "" {
+		sendReply("You need to specify a title")
+		return
+	}
+	if opts.Description == "" {
+		opts.Description = "No description provided."
+	}
 	userGit := gitlab.NewClient(nil, asTok)
 	issue, _, err := userGit.Issues.CreateIssue(opts.ProjectID,
 		&gitlab.CreateIssueOptions{
