@@ -52,7 +52,7 @@ func issueAddHandler(git *gitlab.Client, projects []*gitlab.Project, session *di
 		}
 	}
 	if opts.Title == "" {
-		sendReply("You need to specify a title")
+		sendReply("You need to specify a title\n.issues add usage is <title> <options> <description>, maybe you put the options at the start!")
 		return
 	}
 	if opts.Description == "" {
