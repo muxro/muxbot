@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -36,9 +37,9 @@ func issueAddHandler(git *gitlab.Client, projects []*gitlab.Project, session *di
 		sendReply("Usage: " + *prefix + "issues add <title> <issue opts> <description>")
 		return
 	}
-	opts, strErr := parseAddOpts(params[1:], projects, git)
-	if strErr != "" {
-		sendReply("Error: " + strErr)
+	opts, err := parseAddOpts(params[1:], projects, git)
+	if err != nil {
+		sendError(err)
 		return
 	}
 	// fmt.Printf("%#v", opts)
@@ -51,13 +52,6 @@ func issueAddHandler(git *gitlab.Client, projects []*gitlab.Project, session *di
 			return
 		}
 	}
-	if opts.Title == "" {
-		sendReply("You need to specify a title\n.issues add usage is <title> <options> <description>, maybe you put the options at the start!")
-		return
-	}
-	if opts.Description == "" {
-		opts.Description = "No description provided."
-	}
 	userGit := gitlab.NewClient(nil, asTok)
 	issue, _, err := userGit.Issues.CreateIssue(opts.ProjectID,
 		&gitlab.CreateIssueOptions{
@@ -69,48 +63,44 @@ func issueAddHandler(git *gitlab.Client, projects []*gitlab.Project, session *di
 	if err != nil {
 		sendError(err)
 	}
-	sendEmbed(&discordgo.MessageEmbed{Description: fmt.Sprintf("Created issue [#%d %s](%s)", issue.IID, issue.Title, issue.Links.Self)})
+	sendEmbed(&discordgo.MessageEmbed{Description: fmt.Sprintf("Created issue [#%d %s](%s)", issue.IID, issue.Title, issue.WebURL)})
 }
 
-func parseAddOpts(params []string, projects []*gitlab.Project, git *gitlab.Client) (IssuesAddOptions, string) {
+func parseAddOpts(params []string, projects []*gitlab.Project, git *gitlab.Client) (IssuesAddOptions, error) {
 	ret := IssuesAddOptions{}
 	if len(params) < 1 {
-		return ret, ""
+		return ret, errors.New("No parameters specified")
 	}
-	descActive := false
+	var noParamText string
 	for _, param := range params {
-		if param[0] == '&' { // project
-			descActive = true
+		switch param[0] {
+		case '&':
 			if isRepo(param[1:], projects) {
 				ret.ProjectID = getRepo(param[1:], projects).ID
 			} else {
-				return IssuesAddOptions{}, "Invalid Repo"
+				return IssuesAddOptions{}, errors.New("Invalid Repo")
 			}
-		} else if param[0] == '+' { // tag
-			descActive = true
+		case '+':
 			ret.Tags = append(ret.Tags, param[1:])
-		} else if param[0] == '$' { // assignee
-			descActive = true
+		case '$':
 			user, err := getUserFromName(param[1:], git)
-			if err != nil {
-				return ret, "User not found"
+			if err != nil || user == nil {
+				return IssuesAddOptions{}, errors.New("Assignee user not found")
 			}
 			ret.Assignee = user.ID
-		} else {
-			if descActive { // append to description
-				if ret.Description == "" {
-					ret.Description = param
-				} else {
-					ret.Description += " " + param
-				}
-			} else { // append to title
-				if ret.Title == "" {
-					ret.Title = param
-				} else {
-					ret.Title += " " + param
-				}
-			}
+		default:
+			noParamText += param + " "
 		}
 	}
-	return ret, ""
+	titleAndDesc := strings.SplitN(noParamText, " -- ", 2)
+	if len(titleAndDesc) == 0 {
+		return IssuesAddOptions{}, errors.New("No title specified")
+	}
+	ret.Title = titleAndDesc[0]
+	if len(titleAndDesc) == 2 {
+		ret.Description = titleAndDesc[1]
+	} else {
+		ret.Description = "No description provided."
+	}
+	return ret, nil
 }

@@ -107,28 +107,29 @@ func todoHandler(session *discordgo.Session, message *discordgo.MessageCreate, s
 // ParseTodoMessage parses a Todo
 func ParseTodoMessage(content string) []Category {
 	lines := strings.Split(content, "\n")
-	data := []Category{}
-	currentCategory := Category{}
+	var data []Category
+	var currentCategory Category
 	for i, line := range lines {
-		if i > 0 {
-			if len(line) < 2 {
-				continue
-			} else if line[0] == ' ' { /// it is a new todo
-				content := ""
-				line = strings.TrimPrefix(line, " ")
-				lineData := strings.SplitN(line, ".", 2)
-				content = lineData[1][1:]
-				completed := strings.Contains(content, "~~")
-				currentCategory.todos = append(currentCategory.todos, Todo{content, completed})
-			} else { /// it is a new category
-				if len(currentCategory.name) > 0 {
-					data = append(data, currentCategory)
-				}
-				currentCategory = Category{}
-				lineData := strings.SplitN(line, ".", 2)
-				if len(lineData[1]) > 1 {
-					currentCategory.name = lineData[1][1:]
-				}
+		if i == 0 {
+			continue
+		}
+		if len(line) < 2 {
+			continue
+		} else if line[0] == ' ' { /// it is a new todo
+			content := ""
+			line = strings.TrimPrefix(line, " ")
+			lineData := strings.SplitN(line, ".", 2)
+			content = lineData[1][1:]
+			completed := strings.Contains(content, "~~")
+			currentCategory.todos = append(currentCategory.todos, Todo{content, completed})
+		} else { /// it is a new category
+			if len(currentCategory.name) > 0 {
+				data = append(data, currentCategory)
+			}
+			currentCategory = Category{}
+			lineData := strings.SplitN(line, ".", 2)
+			if len(lineData[1]) > 1 {
+				currentCategory.name = lineData[1][1:]
 			}
 		}
 	}

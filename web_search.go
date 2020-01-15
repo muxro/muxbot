@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 
@@ -9,6 +10,8 @@ import (
 	"google.golang.org/api/youtube/v3"
 )
 
+const userAgent = "Mozilla/5.0 (Linux; Android 4.0.4; Galaxy Nexus Build/IMM76B) AppleWebKit/535.19 (KHTML, like Gecko) Chrome/18.0.1025.133 Mobile Safari/535.19"
+
 func scrapeWeb(url string) (*goquery.Document, error) {
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", url, nil)
@@ -16,7 +19,7 @@ func scrapeWeb(url string) (*goquery.Document, error) {
 		return nil, err
 	}
 
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Linux; Android 4.0.4; Galaxy Nexus Build/IMM76B) AppleWebKit/535.19 (KHTML, like Gecko) Chrome/18.0.1025.133 Mobile Safari/535.19")
+	req.Header.Set("User-Agent", userAgent)
 
 	res, err := client.Do(req)
 	if err != nil {
@@ -92,5 +95,5 @@ func getFirstYTResult(q string) (string, error) {
 		return url, nil
 	}
 
-	return "Error: Something broke", nil
+	return "", errors.New("youtube: unknown kind of first response")
 }

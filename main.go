@@ -1,10 +1,13 @@
 package main
 
 import (
+	"database/sql"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strings"
 	"syscall"
 
@@ -23,17 +26,18 @@ var (
 
 	prefix   = flag.String("prefix", ".", "Specify the bot prefix")
 	commands = make(map[string]cmd)
+	db       *sql.DB
 )
 
 func main() {
 	flag.Parse()
 
-	getEnvVar("token", &token)
-	getEnvVar("gkey", &googleDevKey)
-	getEnvVar("glt", &gitlabToken)
+	getEnvVar("token", token)
+	getEnvVar("gkey", googleDevKey)
+	getEnvVar("glt", gitlabToken)
 
 	if *token == "none" {
-		panic("No discord token specified, can't run the bot without it.")
+		log.Fatal("No discord token specified, can't run the bot without it.")
 	}
 
 	if *googleDevKey == "none" {
@@ -50,40 +54,49 @@ func main() {
 		return
 	}
 
-	err = initDB()
+	db, err = sql.Open("sqlite3", "database.db")
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS gitlabKeys (dtag varchar(512) UNIQUE, key varchar(512));")
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS activeRepo (dtag varchar(512) UNIQUE, repo varchar(512));")
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	dg.AddHandler(ready)
 	dg.AddHandler(messageCreate)
 
 	// register commands
-	registerCommand("help", helpHandler)
-	registerCommand("ping", pingHandler)
-	registerCommand("echo", echoHandler)
-	registerCommand("eval", evalHandler)
-	registerCommand("g", gHandler)
-	registerCommand("gis", gisHandler)
+	commands["help"] = helpHandler
+	commands["ping"] = pingHandler
+	commands["echo"] = echoHandler
+	commands["eval"] = evalHandler
+	commands["g"] = gHandler
+	commands["gis"] = gisHandler
 	if *googleDevKey != "none" {
-		registerCommand("yt", ytHandler)
+		commands["yt"] = ytHandler
 	} else {
-		registerCommand("yt", nonExistentHandler)
+		commands["yt"] = nonExistentHandler
 	}
-	registerCommand("todo", todoHandler)
+	commands["todo"] = todoHandler
 	if *gitlabToken != "none" {
-		registerCommand("issues", issueHandler)
-		registerCommand("glkey", glKeyHandler)
+		commands["issues"] = issueHandler
+		commands["glkey"] = glKeyHandler
 	} else {
-		registerCommand("issues", nonExistentHandler)
-		registerCommand("glkey", nonExistentHandler)
+		commands["issues"] = nonExistentHandler
+		commands["glkey"] = nonExistentHandler
 	}
 
 	err = dg.Open()
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
-	defer dg.Close()
 
 	fmt.Println("Running MuxBot. Press Ctrl+C to exit")
 
@@ -94,7 +107,7 @@ func main() {
 }
 
 func ready(s *discordgo.Session, event *discordgo.Ready) {
-	s.UpdateStatus(0, "MuxBot is Aliiive!")
+	s.UpdateStatus(0, "MuxBot is Aliive! Use "+*prefix+"help for a list of commands")
 }
 
 func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate) {
@@ -104,6 +117,13 @@ func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate)
 
 	sendMessage, sendReply, sendError := initMessageSenders(session, message)
 
+	defer func() {
+		if r := recover(); r != nil {
+			sendReply("something went wrong...")
+			fmt.Println(r, string(debug.Stack()))
+		}
+	}()
+
 	// It is a command
 	if strings.HasPrefix(message.Content, *prefix) {
 		command := strings.Split(strings.TrimPrefix(message.Content, *prefix), " ")[0]
@@ -111,10 +131,6 @@ func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate)
 			cmdHandler(session, message, sendReply, sendMessage, sendError)
 		}
 	}
-}
-
-func registerCommand(name string, handler cmd) {
-	commands[name] = handler
 }
 
 func initMessageSenders(session *discordgo.Session, message *discordgo.MessageCreate) (sendMessage messageSender, sendReply messageSender, sendError errorSender) {
@@ -128,15 +144,23 @@ func initMessageSenders(session *discordgo.Session, message *discordgo.MessageCr
 	}
 
 	sendError = func(err error) *discordgo.Message {
-		return sendReply(fmt.Sprintf("Eroare: %v", err))
+		return sendReply(fmt.Sprintf("Error: %v", err))
 	}
 
 	return
 }
 
-func getEnvVar(name string, variable **string) {
+func getEnvVar(name string, variable *string) {
 	envVal, exists := os.LookupEnv(name)
 	if exists {
-		**variable = envVal
+		*variable = envVal
 	}
+}
+
+func getArguments(message *discordgo.MessageCreate) []string {
+	return strings.Split(message.Content, " ")[1:]
+}
+
+func getText(message *discordgo.MessageCreate) string {
+	return strings.Join(getArguments(message), " ")
 }

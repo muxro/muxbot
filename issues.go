@@ -11,7 +11,7 @@ import (
 func issueHandler(session *discordgo.Session, message *discordgo.MessageCreate, sendReply messageSender, sendMessage messageSender, sendError errorSender) {
 	git := gitlab.NewClient(nil, *gitlabToken)
 	opt := &gitlab.ListProjectsOptions{Membership: gitlab.Bool(true)}
-	params := strings.Split(message.Content, " ")[1:]
+	params := getArguments(message)
 	projects, _, err := git.Projects.ListProjects(opt)
 	if err != nil {
 		sendError(err)
@@ -148,6 +148,5 @@ func getUserFromName(username string, git *gitlab.Client) (*gitlab.User, error) 
 		fmt.Printf("No user found\n")
 		return nil, nil
 	}
-	fmt.Printf("%#v\n", users[0])
 	return users[0], nil
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -61,10 +62,10 @@ func issueCloseHandler(git *gitlab.Client, projects []*gitlab.Project, session *
 	}
 	pid := getRepo(repo, projects).ID
 
-	_, _, err := userGit.Issues.UpdateIssue(pid, id, &gitlab.UpdateIssueOptions{StateEvent: gitlab.String("close")})
+	gitIssue, _, err := userGit.Issues.UpdateIssue(pid, id, &gitlab.UpdateIssueOptions{StateEvent: gitlab.String("close")})
 	if err != nil {
 		sendError(err)
 		return
 	}
-	sendReply("Issue closed")
+	sendReply(fmt.Sprintf("Closed %s", gitIssue.WebURL))
 }

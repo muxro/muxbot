@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -32,9 +33,9 @@ func issueModifyHandler(git *gitlab.Client, projects []*gitlab.Project, session 
 		return
 	}
 
-	opts, ok := parseModifyOpts(params[1:])
-	if ok == false {
-		sendReply("Something you gave me isn't right, please try again.")
+	opts, err := parseModifyOpts(params[1:])
+	if err != nil {
+		sendError(err)
 		return
 	}
 	if opts.Repo == "" {
@@ -65,9 +66,11 @@ func issueModifyHandler(git *gitlab.Client, projects []*gitlab.Project, session 
 	}
 	updateOpts := &gitlab.UpdateIssueOptions{}
 	if opts.Assignee != "" {
+		fmt.Println(opts.Assignee)
 		user, err := getUserFromName(opts.Assignee, git)
-		if err != nil {
-			sendError(err)
+		fmt.Println(user)
+		if err != nil || user == nil {
+			sendError(errors.New("Could not find user"))
 			return
 		}
 		updateOpts.AssigneeIDs = []int{user.ID}
@@ -79,19 +82,17 @@ func issueModifyHandler(git *gitlab.Client, projects []*gitlab.Project, session 
 		return
 	}
 	sendReply("Issue successfully modified.")
-	fmt.Printf("%#v\n", issue)
 }
 
-func parseModifyOpts(params []string) (opts IssuesModifyOptions, ok bool) {
+func parseModifyOpts(params []string) (IssuesModifyOptions, error) {
 	fmt.Println(params)
 	issue := params[0]
-	ok = true
+	var opts, emptyOpts IssuesModifyOptions
 	if len(strings.Split(issue, "#")) == 2 {
 		split := strings.Split(issue, "#")
 		id, err := strconv.Atoi(split[1])
 		if err != nil {
-			ok = false
-			return
+			return emptyOpts, err
 		}
 		opts.ID = id
 		opts.Repo = split[0]
@@ -99,26 +100,25 @@ func parseModifyOpts(params []string) (opts IssuesModifyOptions, ok bool) {
 		if issue[0] >= '0' && issue[0] <= '9' {
 			id, err := strconv.Atoi(issue)
 			if err != nil {
-				ok = false
-				return
+				return emptyOpts, err
 			}
 			opts.ID = id
 		} else {
-			ok = false
-			return
+			return emptyOpts, errors.New("Expected first argument to be in the form repo#id (or just id if you want to modify in the active repo), but it isn't")
 		}
 	}
 	params = params[1:]
 	for _, param := range params {
-		if param[0] == '$' { // assignee
+		switch param[0] {
+		case '$':
 			opts.Assignee = param[1:]
-		} else if param[0] == '-' { // remove tag
+		case '-':
 			opts.TagsRemove = append(opts.TagsRemove, param[1:])
-		} else if param[0] == '+' { // add tag
+		case '+':
 			opts.TagsAdd = append(opts.TagsAdd, param[1:])
 		}
 	}
-	return
+	return opts, nil
 }
 
 func inTagArray(element string, array []string) bool {

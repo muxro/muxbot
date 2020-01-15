@@ -83,26 +83,28 @@ func issueListHandler(git *gitlab.Client, projects []*gitlab.Project, session *d
 					return
 				}
 				for _, issue := range issues {
-					if issue.ClosedAt == nil {
-						if searchOpts.Author == "" || issue.Author.Name == searchOpts.Author {
-							if (searchOpts.Assignee == "") ||
-								(issue.Assignee != nil && issue.Assignee.Name == searchOpts.Assignee) {
-
-								assignee := ""
-								if issue.Assignee != nil {
-									assignee = issue.Assignee.Name
-								}
-								issueList = append(issueList, IssuesListOptions{Group: project.Namespace.Path,
-									Repo:       project.Name,
-									Author:     issue.Author.Name,
-									Assignee:   assignee,
-									Tags:       issue.Labels,
-									Title:      issue.Title,
-									InternalID: issue.IID,
-									URL:        issue.WebURL})
-							}
-						}
+					if issue.ClosedAt != nil {
+						continue
 					}
+					if !(searchOpts.Author == "" || issue.Author.Name == searchOpts.Author) {
+						continue
+					}
+					if !(searchOpts.Assignee == "" ||
+						(issue.Assignee != nil && issue.Assignee.Name == searchOpts.Assignee)) {
+						continue
+					}
+					assignee := ""
+					if issue.Assignee != nil {
+						assignee = issue.Assignee.Name
+					}
+					issueList = append(issueList, IssuesListOptions{Group: project.Namespace.Path,
+						Repo:       project.Name,
+						Author:     issue.Author.Name,
+						Assignee:   assignee,
+						Tags:       issue.Labels,
+						Title:      issue.Title,
+						InternalID: issue.IID,
+						URL:        issue.WebURL})
 				}
 			}
 		}

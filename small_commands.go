@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/Knetic/govaluate"
 	"github.com/bwmarrin/discordgo"
@@ -17,14 +16,14 @@ func pingHandler(session *discordgo.Session, message *discordgo.MessageCreate, s
 }
 
 func echoHandler(session *discordgo.Session, message *discordgo.MessageCreate, sendReply messageSender, sendMessage messageSender, sendError errorSender) {
-	commandMessage := strings.Join(strings.Split(message.Content, " ")[1:], " ")
+	commandMessage := getText(message)
 	if commandMessage != "" {
 		sendReply(commandMessage)
 	}
 }
 
 func evalHandler(session *discordgo.Session, message *discordgo.MessageCreate, sendReply messageSender, sendMessage messageSender, sendError errorSender) {
-	commandMessage := strings.Join(strings.Split(message.Content, " ")[1:], " ")
+	commandMessage := getText(message)
 	expr, err := govaluate.NewEvaluableExpression(commandMessage)
 	if err != nil {
 		sendError(err)
@@ -40,7 +39,7 @@ func evalHandler(session *discordgo.Session, message *discordgo.MessageCreate, s
 }
 
 func gHandler(session *discordgo.Session, message *discordgo.MessageCreate, sendReply messageSender, sendMessage messageSender, sendError errorSender) {
-	commandMessage := strings.Join(strings.Split(message.Content, " ")[1:], " ")
+	commandMessage := getText(message)
 	res, err := scrapeFirstWebRes(commandMessage)
 	if err != nil {
 		sendError(err)
@@ -50,7 +49,7 @@ func gHandler(session *discordgo.Session, message *discordgo.MessageCreate, send
 }
 
 func gisHandler(session *discordgo.Session, message *discordgo.MessageCreate, sendReply messageSender, sendMessage messageSender, sendError errorSender) {
-	commandMessage := strings.Join(strings.Split(message.Content, " ")[1:], " ")
+	commandMessage := getText(message)
 	res, err := scrapeFirstImgRes(commandMessage)
 	if err != nil {
 		sendError(err)
@@ -60,7 +59,7 @@ func gisHandler(session *discordgo.Session, message *discordgo.MessageCreate, se
 }
 
 func ytHandler(session *discordgo.Session, message *discordgo.MessageCreate, sendReply messageSender, sendMessage messageSender, sendError errorSender) {
-	commandMessage := strings.Join(strings.Split(message.Content, " ")[1:], " ")
+	commandMessage := getText(message)
 	res, err := getFirstYTResult(commandMessage)
 	if err != nil {
 		sendError(err)
