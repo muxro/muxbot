@@ -19,31 +19,27 @@ type IssuesModifyOptions struct {
 	Assignee   string
 }
 
-func issueModifyHandler(git *gitlab.Client, projects []*gitlab.Project, session *discordgo.Session, message *discordgo.MessageCreate) {
-	params := strings.Split(message.Content, " ")[1:]
-	_, sendReply, sendError := initMessageSenders(session, message)
+func issueModifyHandler(bot *Bot, git *gitlab.Client, projects []*gitlab.Project, args []string, msg *discordgo.Message) error {
 
-	asTok, exists := associatedKey(message.Author.ID)
+	asTok, exists := associatedKey(msg.Author.ID)
 	if exists == false {
-		sendReply("Error: You don't have a gitlab Personal Access Token associated with your account")
-		return
+		return errors.New("you don't have a gitlab Personal Access Token associated with your account")
 	}
-	if len(params) < 3 {
-		sendReply("Usage: " + *prefix + "issues modify issueid <issue opts>")
-		return
+	if len(args) < 1 {
+		return errors.New("not enough parameters")
 	}
 
-	opts, err := parseModifyOpts(params[1:])
+	opts, err := parseModifyOpts(args[1:])
 	if err != nil {
-		sendError(err)
-		return
+		return err
 	}
+
 	if opts.Repo == "" {
-		activeRepo, exists := getActiveRepo(message.Author.ID)
+		activeRepo, exists := getActiveRepo(msg.Author.ID)
 		if exists {
 			opts.Repo = activeRepo
 		} else {
-			sendReply("You need to specify either an active repo or a repo to search in")
+			return errors.New("you need to specify either an active repo or a repo to search in")
 		}
 	}
 
@@ -51,9 +47,9 @@ func issueModifyHandler(git *gitlab.Client, projects []*gitlab.Project, session 
 	pid := getRepo(opts.Repo, projects).ID
 	issue, _, err := userGit.Issues.GetIssue(pid, opts.ID)
 	if err != nil {
-		sendError(err)
-		return
+		return err
 	}
+
 	totalTags := []string(issue.Labels)
 	newTags := gitlab.Labels{}
 	for _, tag := range totalTags {
@@ -70,23 +66,24 @@ func issueModifyHandler(git *gitlab.Client, projects []*gitlab.Project, session 
 		user, err := getUserFromName(opts.Assignee, git)
 		fmt.Println(user)
 		if err != nil || user == nil {
-			sendError(errors.New("Could not find user"))
-			return
+			return errors.New("could not find user")
 		}
+
 		updateOpts.AssigneeIDs = []int{user.ID}
 	}
 	updateOpts.Labels = &newTags
 	issue, _, err = userGit.Issues.UpdateIssue(pid, opts.ID, updateOpts)
 	if err != nil {
-		sendError(err)
-		return
+		return err
 	}
-	sendReply("Issue successfully modified.")
+
+	bot.SendReply(msg, "Issue successfully modified.")
+	return nil
 }
 
-func parseModifyOpts(params []string) (IssuesModifyOptions, error) {
-	fmt.Println(params)
-	issue := params[0]
+func parseModifyOpts(args []string) (IssuesModifyOptions, error) {
+	fmt.Println(args)
+	issue := args[0]
 	var opts, emptyOpts IssuesModifyOptions
 	if len(strings.Split(issue, "#")) == 2 {
 		split := strings.Split(issue, "#")
@@ -94,6 +91,7 @@ func parseModifyOpts(params []string) (IssuesModifyOptions, error) {
 		if err != nil {
 			return emptyOpts, err
 		}
+
 		opts.ID = id
 		opts.Repo = split[0]
 	} else {
@@ -102,13 +100,14 @@ func parseModifyOpts(params []string) (IssuesModifyOptions, error) {
 			if err != nil {
 				return emptyOpts, err
 			}
+
 			opts.ID = id
 		} else {
-			return emptyOpts, errors.New("Expected first argument to be in the form repo#id (or just id if you want to modify in the active repo), but it isn't")
+			return emptyOpts, errors.New("expected first argument to be in the form repo#id (or just id if you want to modify in the active repo), but it isn't")
 		}
 	}
-	params = params[1:]
-	for _, param := range params {
+	args = args[1:]
+	for _, param := range args {
 		switch param[0] {
 		case '$':
 			opts.Assignee = param[1:]

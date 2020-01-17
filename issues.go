@@ -1,83 +1,51 @@
 package main
 
 import (
-	"fmt"
+	"errors"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/xanzy/go-gitlab"
 )
 
-func issueHandler(session *discordgo.Session, message *discordgo.MessageCreate, sendReply messageSender, sendMessage messageSender, sendError errorSender) {
+// func issueHandler(session *discordgo.Session, message *discordgo.MessageCreate, sendReply messageSender, sendMessage messageSender) error {
+func issueHandler(bot *Bot, msg *discordgo.Message, args string) error {
+	parts := strings.Fields(args)
 	git := gitlab.NewClient(nil, *gitlabToken)
 	opt := &gitlab.ListProjectsOptions{Membership: gitlab.Bool(true)}
-	params := getArguments(message)
 	projects, _, err := git.Projects.ListProjects(opt)
 	if err != nil {
-		sendError(err)
-		return
+		return err
 	}
-	if len(params) < 1 {
-		sendReply("Usage: " + *prefix + "issues <list|create|modify>")
-		return
+
+	if len(parts) < 1 {
+		return errors.New("not enough args")
 	}
-	switch params[0] {
-	case "list":
-		issueListHandler(git, projects, session, message)
-	case "add":
-		issueAddHandler(git, projects, session, message)
-	case "activeRepo":
-		if len(params) < 2 {
-			sendReply("Usage: " + *prefix + "issues activeRepo <set/get/erase>")
-			return
-		}
-		switch params[1] {
-		case "set":
-			if len(params) != 3 {
-				sendReply("Usage: " + *prefix + "isseus activeRepo set <repo>")
-				return
-			}
-			if isRepo(params[2], projects) == false {
-				sendReply("You need to specify a valid repo which you are a member of that the bot can see")
-				return
-			}
-			if strings.ContainsAny(params[2], "/") == false { // we would also like a group name
-				for _, project := range projects {
-					if isSameRepo(params[2], project) {
-						params[2] = project.Namespace.Path + "/" + project.Path
-						break
-					}
-				}
-			}
-			err := setActiveRepo(message.Author.ID, params[2])
-			if err != nil {
-				sendError(err)
-			}
-			sendReply("Set active repo " + params[2])
-		case "get":
-			repo, exists := getActiveRepo(message.Author.ID)
-			if exists == false {
-				sendReply("Error: No active repo set")
-				return
-			}
-			sendReply("Your active repo is " + repo)
-		case "erase":
-			err = removeActiveRepo(message.Author.ID)
-			if err != nil {
-				sendError(err)
-				return
-			}
-			sendReply("Your active repo has been erased from the database")
-		default:
-			sendReply("Usage: " + *prefix + "issues activeRepo <set/get/erase>")
-		}
-	case "modify":
-		issueModifyHandler(git, projects, session, message)
-	case "close":
-		issueCloseHandler(git, projects, session, message)
-	default:
-		sendReply("Refer to " + *prefix + "help for a list of commands")
-	}
+
+	issueMux := NewCommandMux()
+	issueMux.IssueCommand("list", issueListHandler, git, projects)
+	issueMux.IssueCommand("add", issueAddHandler, git, projects)
+	issueMux.IssueCommand("activeRepo", issuesActiveRepoHandler, git, projects)
+	issueMux.IssueCommand("modify", issueModifyHandler, git, projects)
+	issueMux.IssueCommand("close", issueCloseHandler, git, projects)
+
+	msg.Content = strings.Join(parts, " ")
+	return issueMux.Handle(bot, msg)
+
+	// switch name {
+	// case "list":
+	// 	return issueListHandler(bot, git, projects, parts, msg)
+	// case "add":
+	// 	return issueAddHandler(bot, git, projects, parts, msg)
+	// case "activeRepo":
+	// 	return issuesActiveRepoHandler(bot, git, projects, parts, msg)
+	// case "modify":
+	// 	return issueModifyHandler(bot, git, projects, parts, msg)
+	// case "close":
+	// 	return issueCloseHandler(bot, git, projects, parts, msg)
+	// default:
+	// 	return errors.New("Not enough parameters")
+	// }
 }
 
 func getIssueProject(issue *gitlab.Issue) (*gitlab.Project, error) {
@@ -118,35 +86,34 @@ func isSameRepo(name string, project *gitlab.Project) bool {
 	return false
 }
 
-func glKeyHandler(session *discordgo.Session, message *discordgo.MessageCreate, sendReply messageSender, sendMessage messageSender, sendError errorSender) {
-	key := strings.Join(strings.Split(message.Content, " ")[1:], " ")
-	err := session.ChannelMessageDelete(message.ChannelID, message.ID)
+func gitlabKeyHandler(bot *Bot, msg *discordgo.Message, key string) error {
+	err := bot.ds.ChannelMessageDelete(msg.ChannelID, msg.ID)
 	if err != nil {
-		sendReply("Beware, I can't delete the message, keep the key safe")
+		bot.SendReply(msg, "Beware, I can't delete the message, keep the key safe")
 	}
+
 	result, ok := testKey(key)
 	if ok == true {
-		err := associateUserToToken(message.Author.ID, key)
-
+		err := associateUserToToken(msg.Author.ID, key)
 		if err != nil {
-			sendError(err)
-			return
+			return err
 		}
-		sendReply("Associated user with gitlab user " + result.Name)
+
+		bot.SendReply(msg, "Associated user with gitlab user "+result.Name)
 	} else {
-		sendReply("Invalid key")
+		bot.SendReply(msg, "Invalid key")
 	}
+	return nil
 }
 
 func getUserFromName(username string, git *gitlab.Client) (*gitlab.User, error) {
 	users, _, err := git.Users.ListUsers(&gitlab.ListUsersOptions{Username: gitlab.String(username)})
 	if err != nil {
-		fmt.Printf("%#v\n", err)
 		return nil, err
 	}
+
 	if len(users) < 1 {
-		fmt.Printf("No user found\n")
-		return nil, nil
+		return nil, errors.New("No user found")
 	}
 	return users[0], nil
 }

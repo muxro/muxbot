@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -9,18 +10,13 @@ import (
 	"github.com/xanzy/go-gitlab"
 )
 
-func issueCloseHandler(git *gitlab.Client, projects []*gitlab.Project, session *discordgo.Session, message *discordgo.MessageCreate) {
-	params := strings.Split(message.Content, " ")[1:]
-	_, sendReply, sendError := initMessageSenders(session, message)
-
-	asTok, exists := associatedKey(message.Author.ID)
+func issueCloseHandler(bot *Bot, git *gitlab.Client, projects []*gitlab.Project, args []string, msg *discordgo.Message) error {
+	asTok, exists := associatedKey(msg.Author.ID)
 	if exists == false {
-		sendReply("Error: You don't have a gitlab Personal Access Token associated with your account")
-		return
+		return errors.New("you don't have a gitlab Personal Access Token associated with your account")
 	}
-	if len(params) != 2 {
-		sendReply("Usage: " + *prefix + "issues close issueid")
-		return
+	if len(args) != 1 {
+		return errors.New("not enough parameters")
 	}
 
 	userGit := gitlab.NewClient(nil, asTok)
@@ -28,44 +24,44 @@ func issueCloseHandler(git *gitlab.Client, projects []*gitlab.Project, session *
 	var id int
 	var repo string
 
-	issue := params[1]
+	issue := args[0]
 	if len(strings.Split(issue, "#")) == 2 {
 		split := strings.Split(issue, "#")
 		ID, err := strconv.Atoi(split[1])
 		if err != nil {
-			sendReply("Invalid id")
-			return
+			return errors.New("invalid ID")
 		}
+
 		id = ID
 		repo = split[0]
 	} else {
 		if issue[0] >= '0' && issue[0] <= '9' {
 			ID, err := strconv.Atoi(issue)
 			if err != nil {
-				sendReply("Invalid id")
-				return
+				return errors.New("invalid ID")
 			}
+
 			id = ID
 		} else {
-			sendReply("Invalid id")
-			return
+			return errors.New("invalid ID")
 		}
 	}
 
 	if repo == "" {
-		activeRepo, exists := getActiveRepo(message.Author.ID)
+		activeRepo, exists := getActiveRepo(msg.Author.ID)
 		if exists {
 			repo = activeRepo
 		} else {
-			sendReply("You need to specify either an active repo or a repo to search in")
+			return errors.New("you need to specify either an active repo or a repo to search in")
 		}
 	}
 	pid := getRepo(repo, projects).ID
 
 	gitIssue, _, err := userGit.Issues.UpdateIssue(pid, id, &gitlab.UpdateIssueOptions{StateEvent: gitlab.String("close")})
 	if err != nil {
-		sendError(err)
-		return
+		return err
 	}
-	sendReply(fmt.Sprintf("Closed %s", gitIssue.WebURL))
+
+	bot.SendReply(msg, fmt.Sprintf("Closed <%s>", gitIssue.WebURL))
+	return nil
 }

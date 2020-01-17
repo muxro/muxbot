@@ -11,10 +11,12 @@ func setActiveRepo(dtag string, repo string) error {
 	if err != nil {
 		return err
 	}
+
 	_, err = stmt.Exec(dtag, repo)
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -24,6 +26,7 @@ func getActiveRepo(user string) (string, bool) {
 	if err != nil {
 		return "", false
 	}
+
 	return key, true
 }
 
@@ -32,10 +35,12 @@ func removeActiveRepo(user string) error {
 	if err != nil {
 		return err
 	}
+
 	_, err = stmt.Exec(user)
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -57,6 +62,7 @@ func associatedKey(id string) (string, bool) {
 	if err != nil {
 		return "", false
 	}
+
 	return key, true
 }
 
@@ -67,6 +73,7 @@ func testKey(key string) (gitlab.User, bool) {
 		fmt.Println(err)
 		return gitlab.User{}, false
 	}
+
 	return *user, true
 }
 
@@ -75,9 +82,11 @@ func associateUserToToken(user string, token string) error {
 	if err != nil {
 		return err
 	}
+
 	_, err = stmt.Exec(user, token)
 	if err != nil {
 		return err
 	}
+
 	return nil
 }

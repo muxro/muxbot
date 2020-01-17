@@ -62,11 +62,9 @@
         - `.issues activeRepo set <repo>` sets the active repository for the requesting user
         - `.issues activeRepo erase` removes the active repository for the requesting user
 
-* `.glkey`
-    - `glkey` associates a discord user with a personal access token and is used by `.issues` when `list`ing issues assigned to `$self` and `add`ing issues
-    - Usage: `.glkey <personal access token>`
+* `.gitlab-key`
+    - `gitlab-key` associates a discord user with a personal access token and is used by `.issues` when `list`ing issues assigned to `$self` and `add`ing issues
+    - Usage: `.gitlab-key <personal access token>`
 
 * `.todo`
-    - `todo` is an unfinished command and should not be used for now. It will be documented more thoroughly when it is finished.
-    - Objectives: `.todo <add/remove/clean/move/rename/done>`
-    - Completed: `.todo <add/create/done/clean>`
+    - `todo` doesn't exist anymore, but I am leaving this here as an homage to it: my first big command I implemented. Thank you for your service <3

@@ -18,38 +18,26 @@ type IssuesAddOptions struct {
 	ProjectID   int
 }
 
-func issueAddHandler(git *gitlab.Client, projects []*gitlab.Project, session *discordgo.Session, message *discordgo.MessageCreate) {
-	params := strings.Split(message.Content, " ")[1:]
-
-	sendEmbed := func(embed *discordgo.MessageEmbed) *discordgo.Message {
-		resulting, _ := session.ChannelMessageSendEmbed(message.ChannelID, embed)
-		return resulting
-	}
-
-	_, sendReply, sendError := initMessageSenders(session, message)
-
-	asTok, exists := associatedKey(message.Author.ID)
+func issueAddHandler(bot *Bot, git *gitlab.Client, projects []*gitlab.Project, args []string, msg *discordgo.Message) error {
+	asTok, exists := associatedKey(msg.Author.ID)
 	if exists == false {
-		sendReply("Error: You don't have a gitlab Personal Access Token associated with your account")
-		return
+		return errors.New("You don't have a gitlab Personal Access Token associated with your account")
 	}
-	if len(params) < 3 {
-		sendReply("Usage: " + *prefix + "issues add <title> <issue opts> <description>")
-		return
+	if len(args) < 1 {
+		return errors.New("not enough parameters")
 	}
-	opts, err := parseAddOpts(params[1:], projects, git)
+	opts, err := parseAddOpts(args[1:], projects, git)
 	if err != nil {
-		sendError(err)
-		return
+		return err
 	}
+
 	// fmt.Printf("%#v", opts)
-	activeRepo, exists := getActiveRepo(message.Author.ID)
+	activeRepo, exists := getActiveRepo(msg.Author.ID)
 	if opts.ProjectID == 0 {
 		if exists {
 			opts.ProjectID = getRepo(activeRepo, projects).ID
 		} else {
-			sendReply("Error: No repo specified and no active repo set")
-			return
+			return errors.New("No repo specified and no active repo set")
 		}
 	}
 	userGit := gitlab.NewClient(nil, asTok)
@@ -61,18 +49,20 @@ func issueAddHandler(git *gitlab.Client, projects []*gitlab.Project, session *di
 			Labels:      &opts.Tags,
 		})
 	if err != nil {
-		sendError(err)
+		return err
 	}
-	sendEmbed(&discordgo.MessageEmbed{Description: fmt.Sprintf("Created issue [#%d %s](%s)", issue.IID, issue.Title, issue.WebURL)})
+
+	bot.SendReply(msg, fmt.Sprintf("created issue <%s>", issue.WebURL))
+	return nil
 }
 
-func parseAddOpts(params []string, projects []*gitlab.Project, git *gitlab.Client) (IssuesAddOptions, error) {
+func parseAddOpts(args []string, projects []*gitlab.Project, git *gitlab.Client) (IssuesAddOptions, error) {
 	ret := IssuesAddOptions{}
-	if len(params) < 1 {
+	if len(args) < 1 {
 		return ret, errors.New("No parameters specified")
 	}
 	var noParamText string
-	for _, param := range params {
+	for _, param := range args {
 		switch param[0] {
 		case '&':
 			if isRepo(param[1:], projects) {
@@ -87,6 +77,7 @@ func parseAddOpts(params []string, projects []*gitlab.Project, git *gitlab.Clien
 			if err != nil || user == nil {
 				return IssuesAddOptions{}, errors.New("Assignee user not found")
 			}
+
 			ret.Assignee = user.ID
 		default:
 			noParamText += param + " "

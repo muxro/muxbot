@@ -2,72 +2,68 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Knetic/govaluate"
-	"github.com/bwmarrin/discordgo"
 )
 
-func helpHandler(session *discordgo.Session, message *discordgo.MessageCreate, sendReply messageSender, sendMessage messageSender, sendError errorSender) {
-	sendReply("Head over to https://gitlab.com/muxro/muxbot/blob/master/commands.md for information regarding available commands.")
+func helpHandler(args []string) (string, error) {
+	return "Head over to https://gitlab.com/muxro/muxbot/blob/master/commands.md for information regarding available commands.", nil
 }
 
-func pingHandler(session *discordgo.Session, message *discordgo.MessageCreate, sendReply messageSender, sendMessage messageSender, sendError errorSender) {
-	sendReply("pong")
+func pingHandler(args []string) (string, error) {
+	return "pong", nil
 }
 
-func echoHandler(session *discordgo.Session, message *discordgo.MessageCreate, sendReply messageSender, sendMessage messageSender, sendError errorSender) {
-	commandMessage := getText(message)
-	if commandMessage != "" {
-		sendReply(commandMessage)
-	}
+func echoHandler(args []string) (string, error) {
+	return strings.Join(args, " "), nil
 }
 
-func evalHandler(session *discordgo.Session, message *discordgo.MessageCreate, sendReply messageSender, sendMessage messageSender, sendError errorSender) {
-	commandMessage := getText(message)
+func evalHandler(args []string) (string, error) {
+	commandMessage := strings.Join(args, " ")
 	expr, err := govaluate.NewEvaluableExpression(commandMessage)
 	if err != nil {
-		sendError(err)
-		return
+		return "", err
 	}
+
 	result, err := expr.Evaluate(nil)
 	if err != nil {
-
-		sendError(err)
-		return
+		return "", err
 	}
-	sendReply(fmt.Sprintf("%v", result))
+
+	return fmt.Sprintf("%v", result), nil
 }
 
-func gHandler(session *discordgo.Session, message *discordgo.MessageCreate, sendReply messageSender, sendMessage messageSender, sendError errorSender) {
-	commandMessage := getText(message)
+func gHandler(args []string) (string, error) {
+	commandMessage := strings.Join(args, " ")
 	res, err := scrapeFirstWebRes(commandMessage)
 	if err != nil {
-		sendError(err)
-		return
+		return "", err
 	}
-	sendReply(fmt.Sprintf("%s -- %s", res["url"], res["desc"]))
+
+	return fmt.Sprintf("%s -- %s", res["url"], res["desc"]), nil
 }
 
-func gisHandler(session *discordgo.Session, message *discordgo.MessageCreate, sendReply messageSender, sendMessage messageSender, sendError errorSender) {
-	commandMessage := getText(message)
+func gisHandler(args []string) (string, error) {
+	commandMessage := strings.Join(args, " ")
 	res, err := scrapeFirstImgRes(commandMessage)
 	if err != nil {
-		sendError(err)
-		return
+		return "", err
 	}
-	sendReply(res)
+
+	return res, nil
 }
 
-func ytHandler(session *discordgo.Session, message *discordgo.MessageCreate, sendReply messageSender, sendMessage messageSender, sendError errorSender) {
-	commandMessage := getText(message)
+func ytHandler(args []string) (string, error) {
+	commandMessage := strings.Join(args, " ")
 	res, err := getFirstYTResult(commandMessage)
 	if err != nil {
-		sendError(err)
-		return
+		return "", err
 	}
-	sendReply(res)
+
+	return res, nil
 }
 
-func nonExistentHandler(session *discordgo.Session, message *discordgo.MessageCreate, sendReply messageSender, sendMessage messageSender, sendError errorSender) {
-	sendReply("This command has been disabled because the bot maintainer didn't specify the required key")
+func nonExistentHandler(args []string) (string, error) {
+	return "This command has been disabled because the bot maintainer didn't specify the required key", nil
 }
