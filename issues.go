@@ -8,7 +8,6 @@ import (
 	"github.com/xanzy/go-gitlab"
 )
 
-// func issueHandler(session *discordgo.Session, message *discordgo.MessageCreate, sendReply messageSender, sendMessage messageSender) error {
 func issueHandler(bot *Bot, msg *discordgo.Message, args string) error {
 	parts := strings.Fields(args)
 	git := gitlab.NewClient(nil, *gitlabToken)
@@ -88,8 +87,9 @@ func isSameRepo(name string, project *gitlab.Project) bool {
 
 func gitlabKeyHandler(bot *Bot, msg *discordgo.Message, key string) error {
 	err := bot.ds.ChannelMessageDelete(msg.ChannelID, msg.ID)
+	preMessage := ""
 	if err != nil {
-		bot.SendReply(msg, "Beware, I can't delete the message, keep the key safe")
+		preMessage = "Beware, I can't delete the message, keep the key safe\n"
 	}
 
 	result, ok := testKey(key)
@@ -99,7 +99,7 @@ func gitlabKeyHandler(bot *Bot, msg *discordgo.Message, key string) error {
 			return err
 		}
 
-		bot.SendReply(msg, "Associated user with gitlab user "+result.Name)
+		bot.SendReply(msg, preMessage+"Associated user with gitlab user "+result.Name)
 	} else {
 		bot.SendReply(msg, "Invalid key")
 	}

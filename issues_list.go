@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -42,6 +43,7 @@ type IssuesSearchOptions struct {
 }
 
 func issueListHandler(bot *Bot, git *gitlab.Client, projects []*gitlab.Project, args []string, msg *discordgo.Message) error {
+	preMessage := ""
 	searchOpts, msgOpts := parseListOpts(args, projects, msg.Author.ID)
 	issueList := []IssuesListOptions{}
 	if searchOpts.Self == true {
@@ -62,7 +64,7 @@ func issueListHandler(bot *Bot, git *gitlab.Client, projects []*gitlab.Project, 
 		searchOpts.Repo = repoData[1]
 		msgOpts.ShowGroup = false
 		msgOpts.ShowRepo = false
-		bot.SendReply(msg, "Using active repo "+activeRepo)
+		preMessage = fmt.Sprintf("Using active repo %s\n", activeRepo)
 	}
 
 	for _, project := range projects {
@@ -136,7 +138,7 @@ func issueListHandler(bot *Bot, git *gitlab.Client, projects []*gitlab.Project, 
 		issues = append(issues, issueText)
 	}
 
-	bot.ds.ChannelMessageSendEmbed(msg.ChannelID, &discordgo.MessageEmbed{Description: strings.Join(issues, "\n")})
+	bot.SendReplyEmbed(msg, &discordgo.MessageEmbed{Description: preMessage + strings.Join(issues, "\n")})
 
 	return nil
 }
