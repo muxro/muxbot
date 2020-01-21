@@ -2,9 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
-	"strconv"
-	"strings"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/xanzy/go-gitlab"
@@ -19,7 +16,7 @@ type IssuesModifyOptions struct {
 	Assignee   string
 }
 
-func issueModifyHandler(bot *Bot, git *gitlab.Client, projects []*gitlab.Project, args []string, msg *discordgo.Message) error {
+func issueModifyHandler(bot *Bot, projects []*gitlab.Project, args []string, msg *discordgo.Message) error {
 
 	asTok, exists := associatedKey(msg.Author.ID)
 	if exists == false {
@@ -29,7 +26,7 @@ func issueModifyHandler(bot *Bot, git *gitlab.Client, projects []*gitlab.Project
 		return errors.New("not enough parameters")
 	}
 
-	opts, err := parseModifyOpts(args[1:])
+	opts, err := parseModifyOpts(args)
 	if err != nil {
 		return err
 	}
@@ -62,9 +59,7 @@ func issueModifyHandler(bot *Bot, git *gitlab.Client, projects []*gitlab.Project
 	}
 	updateOpts := &gitlab.UpdateIssueOptions{}
 	if opts.Assignee != "" {
-		fmt.Println(opts.Assignee)
-		user, err := getUserFromName(opts.Assignee, git)
-		fmt.Println(user)
+		user, err := getUserFromName(opts.Assignee, bot.git)
 		if err != nil || user == nil {
 			return errors.New("could not find user")
 		}
@@ -82,30 +77,14 @@ func issueModifyHandler(bot *Bot, git *gitlab.Client, projects []*gitlab.Project
 }
 
 func parseModifyOpts(args []string) (IssuesModifyOptions, error) {
-	fmt.Println(args)
-	issue := args[0]
 	var opts, emptyOpts IssuesModifyOptions
-	if len(strings.Split(issue, "#")) == 2 {
-		split := strings.Split(issue, "#")
-		id, err := strconv.Atoi(split[1])
-		if err != nil {
-			return emptyOpts, err
-		}
-
-		opts.ID = id
-		opts.Repo = split[0]
-	} else {
-		if issue[0] >= '0' && issue[0] <= '9' {
-			id, err := strconv.Atoi(issue)
-			if err != nil {
-				return emptyOpts, err
-			}
-
-			opts.ID = id
-		} else {
-			return emptyOpts, errors.New("expected first argument to be in the form repo#id (or just id if you want to modify in the active repo), but it isn't")
-		}
+	id, repo, err := parseIssueParam(args[0])
+	if err != nil {
+		return emptyOpts, err
 	}
+
+	opts.ID = id
+	opts.Repo = repo
 	args = args[1:]
 	for _, param := range args {
 		switch param[0] {

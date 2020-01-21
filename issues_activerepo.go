@@ -8,7 +8,7 @@ import (
 	"github.com/xanzy/go-gitlab"
 )
 
-func issuesActiveRepoHandler(bot *Bot, git *gitlab.Client, projects []*gitlab.Project, args []string, msg *discordgo.Message) error {
+func issuesActiveRepoHandler(bot *Bot, projects []*gitlab.Project, args []string, msg *discordgo.Message) error {
 	if len(args) < 1 {
 		return errors.New("not parameters specified")
 	}

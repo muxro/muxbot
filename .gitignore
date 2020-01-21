@@ -2,3 +2,4 @@
 *.db
 run.sh
 muxBot
+compileAndDeploy.sh

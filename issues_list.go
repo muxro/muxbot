@@ -29,6 +29,7 @@ type IssuesListOptions struct {
 	Title      string
 	InternalID int
 	URL        string
+	Self       bool
 }
 
 // IssuesSearchOptions stores data about the searching of issues
@@ -42,9 +43,9 @@ type IssuesSearchOptions struct {
 	Any      bool
 }
 
-func issueListHandler(bot *Bot, git *gitlab.Client, projects []*gitlab.Project, args []string, msg *discordgo.Message) error {
+func issueListHandler(bot *Bot, projects []*gitlab.Project, args []string, msg *discordgo.Message) error {
 	preMessage := ""
-	searchOpts, msgOpts := parseListOpts(args, projects, msg.Author.ID)
+	searchOpts, msgOpts := parseListOpts(args)
 	issueList := []IssuesListOptions{}
 	if searchOpts.Self == true {
 		selfUname, err := getGitlabUnameFromUser(msg.Author.ID)
@@ -57,6 +58,11 @@ func issueListHandler(bot *Bot, git *gitlab.Client, projects []*gitlab.Project, 
 		}
 		searchOpts.Assignee = selfUname
 	}
+
+	if searchOpts.Repo != "" && !isRepo(searchOpts.Group+"/"+searchOpts.Repo, projects) {
+		return errors.New("invalid repo")
+	}
+
 	activeRepo, exists := getActiveRepo(msg.Author.ID)
 	if searchOpts.Any == false && searchOpts.Group == "" && searchOpts.Repo == "" && exists == true {
 		repoData := strings.SplitN(activeRepo, "/", 2)
@@ -70,7 +76,7 @@ func issueListHandler(bot *Bot, git *gitlab.Client, projects []*gitlab.Project, 
 	for _, project := range projects {
 		if searchOpts.Group == "" || project.Namespace.Path == searchOpts.Group {
 			if searchOpts.Repo == "" || project.Name == searchOpts.Repo {
-				issues, _, err := git.Issues.ListProjectIssues(project.ID, &gitlab.ListProjectIssuesOptions{Sort: gitlab.String("asc"), Labels: searchOpts.Tags})
+				issues, _, err := bot.git.Issues.ListProjectIssues(project.ID, &gitlab.ListProjectIssuesOptions{Sort: gitlab.String("asc"), Labels: searchOpts.Tags})
 				if err != nil {
 					return err
 				}
@@ -143,7 +149,7 @@ func issueListHandler(bot *Bot, git *gitlab.Client, projects []*gitlab.Project, 
 	return nil
 }
 
-func parseListOpts(args []string, projects []*gitlab.Project, authorID string) (IssuesSearchOptions, IssueMsgOptions) {
+func parseListOpts(args []string) (IssuesSearchOptions, IssueMsgOptions) {
 	ret := IssuesSearchOptions{}
 	msgOptions := IssueMsgOptions{ShowGroup: true, ShowAuthor: true, ShowRepo: true, ShowTags: true, ShowAssignee: true}
 	if len(args) < 1 { // It's empty
@@ -156,10 +162,6 @@ func parseListOpts(args []string, projects []*gitlab.Project, authorID string) (
 		} else if param[0] == '$' { // assignee
 			if param == "$any" {
 				msgOptions.ShowAuthor = false
-			} else if param == "$self" {
-				ret.Self = true
-				assignee, _ := getGitlabUnameFromUser(authorID)
-				ret.Assignee = assignee
 			} else {
 				ret.Assignee = param[1:]
 			}
@@ -173,18 +175,14 @@ func parseListOpts(args []string, projects []*gitlab.Project, authorID string) (
 				msgOptions.ShowGroup = true
 				msgOptions.ShowRepo = true
 				ret.Any = true
-			} else if strings.Contains(param, "/") && isRepo(param[1:], projects) {
+			} else if strings.Contains(param, "/") {
 				msgOptions.ShowRepo = false
 				repoName := strings.Split(param[1:], "/")
 				ret.Group = repoName[0]
 				ret.Repo = repoName[1]
 			} else {
-				if isRepo(param, projects) == true {
-					msgOptions.ShowRepo = false
-					ret.Repo = param
-				} else {
-					ret.Group = param
-				}
+				msgOptions.ShowRepo = false
+				ret.Repo = param[1:]
 			}
 		}
 

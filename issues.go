@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -10,9 +11,8 @@ import (
 
 func issueHandler(bot *Bot, msg *discordgo.Message, args string) error {
 	parts := strings.Fields(args)
-	git := gitlab.NewClient(nil, *gitlabToken)
 	opt := &gitlab.ListProjectsOptions{Membership: gitlab.Bool(true)}
-	projects, _, err := git.Projects.ListProjects(opt)
+	projects, _, err := bot.git.Projects.ListProjects(opt)
 	if err != nil {
 		return err
 	}
@@ -22,11 +22,11 @@ func issueHandler(bot *Bot, msg *discordgo.Message, args string) error {
 	}
 
 	issueMux := NewCommandMux()
-	issueMux.IssueCommand("list", issueListHandler, git, projects)
-	issueMux.IssueCommand("add", issueAddHandler, git, projects)
-	issueMux.IssueCommand("activeRepo", issuesActiveRepoHandler, git, projects)
-	issueMux.IssueCommand("modify", issueModifyHandler, git, projects)
-	issueMux.IssueCommand("close", issueCloseHandler, git, projects)
+	issueMux.IssueCommand("list", issueListHandler, bot.git, projects)
+	issueMux.IssueCommand("add", issueAddHandler, bot.git, projects)
+	issueMux.IssueCommand("activeRepo", issuesActiveRepoHandler, bot.git, projects)
+	issueMux.IssueCommand("modify", issueModifyHandler, bot.git, projects)
+	issueMux.IssueCommand("close", issueCloseHandler, bot.git, projects)
 
 	msg.Content = strings.Join(parts, " ")
 	return issueMux.Handle(bot, msg)
@@ -116,4 +116,31 @@ func getUserFromName(username string, git *gitlab.Client) (*gitlab.User, error) 
 		return nil, errors.New("No user found")
 	}
 	return users[0], nil
+}
+
+func parseIssueParam(issue string) (int, string, error) {
+	var id int
+	var repo string
+	if len(strings.Split(issue, "#")) == 2 {
+		split := strings.Split(issue, "#")
+		ID, err := strconv.Atoi(split[1])
+		if err != nil {
+			return -1, "", errors.New("invalid ID")
+		}
+
+		id = ID
+		repo = split[0]
+	} else {
+		if issue[0] >= '0' && issue[0] <= '9' {
+			ID, err := strconv.Atoi(issue)
+			if err != nil {
+				return -1, "", errors.New("invalid ID")
+			}
+
+			id = ID
+		} else {
+			return -1, "", errors.New("invalid ID")
+		}
+	}
+	return id, repo, nil
 }

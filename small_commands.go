@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/Knetic/govaluate"
@@ -62,6 +64,22 @@ func ytHandler(args []string) (string, error) {
 	}
 
 	return res, nil
+}
+
+func regexCommandHandler(args []string) (string, error) {
+	parts := strings.SplitN(strings.Join(args, " "), " -- ", 2)
+	if len(parts) != 2 {
+		return "", errors.New("invalid usage")
+	}
+	regex, err := regexp.Compile(parts[0])
+	if err != nil {
+		return "", fmt.Errorf("Could not parse regex: %s", err)
+	}
+	rets := regex.FindAllString(parts[1], -1)
+	if len(rets) == 0 {
+		return "No match found", nil
+	}
+	return fmt.Sprintf("%d matches found:\n%s", len(rets), strings.Join(rets, "\n")), nil
 }
 
 func nonExistentHandler(args []string) (string, error) {

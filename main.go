@@ -28,8 +28,8 @@ var (
 	db     *sql.DB
 )
 
-// MessageSender is an old relic from todos, but I won't touch it yet
-type MessageSender func(message string) *discordgo.Message
+// MessageHandler is the base handler for commands
+type MessageHandler func(bot *Bot, message *discordgo.Message) (bool, error)
 
 // CommandHandler is a type for all commands, called by the bot
 type CommandHandler func(bot *Bot, message *discordgo.Message, args string) error
@@ -38,7 +38,7 @@ type CommandHandler func(bot *Bot, message *discordgo.Message, args string) erro
 type SimpleCommandHandler func(args []string) (string, error)
 
 // IssueCommandHandler is the handler for issue commands
-type IssueCommandHandler func(bot *Bot, git *gitlab.Client, projects []*gitlab.Project, args []string, msg *discordgo.Message) error
+type IssueCommandHandler func(bot *Bot, projects []*gitlab.Project, args []string, msg *discordgo.Message) error
 
 // CommandMux is an abstraction of the commands and subcommands, to simplify stuff
 type CommandMux struct {
@@ -47,10 +47,11 @@ type CommandMux struct {
 
 // Bot stores the session data about the bot currently running
 type Bot struct {
-	ds      *discordgo.Session
-	db      *sql.DB
-	cmds    *CommandMux
-	msgHist *MessageHistory
+	ds       *discordgo.Session
+	db       *sql.DB
+	msgHist  *MessageHistory
+	git      *gitlab.Client
+	handlers []MessageHandler
 }
 
 // MessageHistory is stores the last max messages to update if the original message is edited
@@ -66,12 +67,6 @@ func NewMessageHistory(max int) *MessageHistory {
 	}
 }
 
-// Add an element to the history "cache" with rollover
-func (mh *MessageHistory) Add(msg, reply *discordgo.Message) {
-	mh.msgs[mh.no] = []*discordgo.Message{msg, reply}
-	mh.no = (mh.no + 1) % len(mh.msgs)
-}
-
 // NewCommandMux creates a new command muxer instance
 func NewCommandMux() *CommandMux {
 	return &CommandMux{
@@ -79,9 +74,17 @@ func NewCommandMux() *CommandMux {
 	}
 }
 
+// Add an element to the history "cache" with rollover
+func (mh *MessageHistory) Add(msg, reply *discordgo.Message) {
+	mh.msgs[mh.no] = []*discordgo.Message{msg, reply}
+	mh.no = (mh.no + 1) % len(mh.msgs)
+}
+
 // Handle gets the params of the command and then runs it
 func (cm *CommandMux) Handle(bot *Bot, msg *discordgo.Message) error {
-	parts := strings.SplitN(msg.Content, " ", 2)
+	content := msg.Content
+	content = strings.TrimPrefix(content, *prefix)
+	parts := strings.SplitN(content, " ", 2)
 	cmd, args := parts[0], ""
 	if len(parts) > 1 {
 		args = parts[1]
@@ -119,7 +122,7 @@ func (cm *CommandMux) SimpleCommand(name string, handler SimpleCommandHandler) {
 func (cm *CommandMux) IssueCommand(name string, handler IssueCommandHandler, git *gitlab.Client, projects []*gitlab.Project) {
 	cm.cmds[name] = func(bot *Bot, msg *discordgo.Message, args string) error {
 		parts := strings.Fields(args)
-		return handler(bot, git, projects, parts, msg)
+		return handler(bot, projects, parts, msg)
 	}
 }
 
@@ -140,11 +143,11 @@ func main() {
 	}
 
 	if *googleDevKey == "none" {
-		fmt.Println("No google dev key specified, `yt` command will be disabled.")
+		log.Println("No google dev key specified, `yt` command will be disabled.")
 	}
 
 	if *gitlabToken == "none" {
-		fmt.Println("No gitlab token specified, the `issues` and `glkey` commands will be disabled.")
+		log.Println("No gitlab token specified, the `issues` and `glkey` commands will be disabled.")
 	}
 
 	err := errors.New("I need this")
@@ -165,44 +168,46 @@ func main() {
 	}
 	dg, err := discordgo.New("Bot " + *token)
 	if err != nil {
-		fmt.Println("Could not create Discord session: ", err)
-		return
+		log.Fatalln("Could not create Discord session: ", err)
 	}
 
 	bot := Bot{ds: dg,
 		db:      db,
-		cmds:    NewCommandMux(),
 		msgHist: NewMessageHistory(100),
 	}
 	bot.registerDiscordHandlers()
 
+	cmds := NewCommandMux()
 	// register commands
-	bot.cmds.SimpleCommand("help", helpHandler)
-	bot.cmds.SimpleCommand("ping", pingHandler)
-	bot.cmds.SimpleCommand("echo", echoHandler)
-	bot.cmds.SimpleCommand("eval", evalHandler)
-	bot.cmds.SimpleCommand("g", gHandler)
-	bot.cmds.SimpleCommand("gis", gisHandler)
+	cmds.SimpleCommand("help", helpHandler)
+	cmds.SimpleCommand("ping", pingHandler)
+	cmds.SimpleCommand("echo", echoHandler)
+	cmds.SimpleCommand("eval", evalHandler)
+	cmds.SimpleCommand("g", gHandler)
+	cmds.SimpleCommand("gis", gisHandler)
 	if *googleDevKey != "none" {
-		bot.cmds.SimpleCommand("yt", ytHandler)
+		cmds.SimpleCommand("yt", ytHandler)
 	} else {
-		bot.cmds.SimpleCommand("yt", nonExistentHandler)
+		cmds.SimpleCommand("yt", nonExistentHandler)
 	}
-	// bot.RegisterCommand("todo", todoHandler)
 	if *gitlabToken != "none" {
-		bot.cmds.Command("issues", issueHandler)
-		bot.cmds.Command("gitlab-key", gitlabKeyHandler)
+		bot.git = gitlab.NewClient(nil, *gitlabToken)
+		cmds.Command("issues", issueHandler)
+		cmds.Command("gitlab-key", gitlabKeyHandler)
+		bot.AddMessageHandler(issueReferenceHandler)
 	} else {
-		bot.cmds.SimpleCommand("issues", nonExistentHandler)
-		bot.cmds.SimpleCommand("gitlab-key", nonExistentHandler)
+		cmds.SimpleCommand("issues", nonExistentHandler)
+		cmds.SimpleCommand("gitlab-key", nonExistentHandler)
 	}
+	cmds.SimpleCommand("regex", regexCommandHandler)
+	bot.AddMessageHandler(CommandMessageHandler(cmds))
 
 	err = dg.Open()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println("Running MuxBot. Press Ctrl+C to exit")
+	log.Println("Running MuxBot. Press Ctrl+C to exit")
 
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
@@ -214,6 +219,29 @@ func (b *Bot) registerDiscordHandlers() {
 	b.ds.AddHandler(b.onReady)
 	b.ds.AddHandler(b.onMessageCreate)
 	b.ds.AddHandler(b.onMessageEdit)
+}
+
+func (b *Bot) onMessage(message *discordgo.Message) {
+	if message.Author == nil || message.Author.ID == b.ds.State.User.ID {
+		return
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			b.SendReply(message, "something went wrong...")
+			fmt.Println(r, string(debug.Stack()))
+		}
+	}()
+
+	for _, handler := range b.handlers {
+		handled, err := handler(b, message)
+		if err != nil {
+			b.SendReply(message, fmt.Sprintln("error:", err))
+		}
+		if handled {
+			break
+		}
+	}
 }
 
 func (b *Bot) onReady(s *discordgo.Session, event *discordgo.Ready) {
@@ -253,16 +281,6 @@ func (b *Bot) SendReplyComplex(msg *discordgo.Message, data *discordgo.MessageSe
 	return replyMsg, err
 }
 
-// // SendMessage sends a message to discord
-// func (b *Bot) SendMessage(channel string, msg string) (*discordgo.Message, error) {
-// 	// TODO: retry if error
-// 	sent, err := b.ds.ChannelMessageSend(channel, msg)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	return sent, nil
-// }
-
 // SendReply sends a message with the username in parentheses at the start
 func (b *Bot) SendReply(msg *discordgo.Message, reply string) (*discordgo.Message, error) {
 	return b.SendReplyComplex(msg, &discordgo.MessageSend{Content: reply})
@@ -281,27 +299,9 @@ func (b *Bot) onMessageEdit(session *discordgo.Session, message *discordgo.Messa
 	b.onMessage(message.Message)
 }
 
-func (b *Bot) onMessage(message *discordgo.Message) {
-	if message.Author == nil || message.Author.ID == b.ds.State.User.ID {
-		return
-	}
-
-	defer func() {
-		if r := recover(); r != nil {
-			b.SendReply(message, "something went wrong...")
-			fmt.Println(r, string(debug.Stack()))
-		}
-	}()
-
-	if !strings.HasPrefix(message.Content, *prefix) {
-		return
-	}
-	message.Content = strings.TrimPrefix(message.Content, *prefix)
-
-	err := b.cmds.Handle(b, message)
-	if err != nil {
-		b.SendReply(message, fmt.Sprintln("error: ", err))
-	}
+// AddMessageHandler adds a new handler to the bot
+func (b *Bot) AddMessageHandler(handler MessageHandler) {
+	b.handlers = append(b.handlers, handler)
 }
 
 func getEnvVar(name string, variable *string) {
@@ -309,12 +309,4 @@ func getEnvVar(name string, variable *string) {
 	if exists {
 		*variable = envVal
 	}
-}
-
-func getArguments(message *discordgo.MessageCreate) []string {
-	return strings.Split(message.Content, " ")[1:]
-}
-
-func getText(message *discordgo.MessageCreate) string {
-	return strings.Join(getArguments(message), " ")
 }
