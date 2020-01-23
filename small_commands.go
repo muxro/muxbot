@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -69,7 +68,7 @@ func ytHandler(args []string) (string, error) {
 func regexCommandHandler(args []string) (string, error) {
 	parts := strings.SplitN(strings.Join(args, " "), " -- ", 2)
 	if len(parts) != 2 {
-		return "", errors.New("invalid usage")
+		return "", errInsufficientArgs
 	}
 	regex, err := regexp.Compile(parts[0])
 	if err != nil {

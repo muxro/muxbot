@@ -1,20 +1,19 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/xanzy/go-gitlab"
 )
 
-func issueCloseHandler(bot *Bot, projects []*gitlab.Project, args []string, msg *discordgo.Message) error {
+func (i *Issues) issueCloseHandler(bot *Bot, args []string, msg *discordgo.Message) error {
 	asTok, exists := associatedKey(msg.Author.ID)
 	if exists == false {
-		return errors.New("you don't have a gitlab Personal Access Token associated with your account")
+		return errNoPAC
 	}
 	if len(args) != 1 {
-		return errors.New("not enough parameters")
+		return errInsufficientArgs
 	}
 
 	userGit := gitlab.NewClient(nil, asTok)
@@ -24,15 +23,11 @@ func issueCloseHandler(bot *Bot, projects []*gitlab.Project, args []string, msg 
 		return err
 	}
 
-	if repo == "" {
-		activeRepo, exists := getActiveRepo(msg.Author.ID)
-		if exists {
-			repo = activeRepo
-		} else {
-			return errors.New("you need to specify either an active repo or a repo to search in")
-		}
+	repo = i.getRepo(msg, repo)
+	pid, err := i.getRepoID(repo, msg)
+	if err != nil {
+		return err
 	}
-	pid := getRepo(repo, projects).ID
 
 	gitIssue, _, err := userGit.Issues.UpdateIssue(pid, id, &gitlab.UpdateIssueOptions{StateEvent: gitlab.String("close")})
 	if err != nil {

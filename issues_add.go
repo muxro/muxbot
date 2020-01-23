@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -19,41 +18,37 @@ type IssuesAddOptions struct {
 	ProjectID   int
 }
 
-func issueAddHandler(bot *Bot, projects []*gitlab.Project, args []string, msg *discordgo.Message) error {
+func (i *Issues) issueAddHandler(bot *Bot, args []string, msg *discordgo.Message) error {
 	asTok, exists := associatedKey(msg.Author.ID)
 	if exists == false {
-		return errors.New("you don't have a gitlab Personal Access Token associated with your account")
+		return errNoPAC
 	}
 	if len(args) < 1 {
-		return errors.New("not enough parameters")
+		return errInsufficientArgs
 	}
 	opts, err := parseAddOpts(args)
 	if err != nil {
 		return err
 	}
-	if opts.Project != "" {
-		if !isRepo(opts.Project, projects) {
-			return errors.New("invalid project")
-		}
-		opts.ProjectID = getRepo(opts.Project, projects).ID
-	}
 
 	var assigneeID int
 	if opts.Assignee != "" {
-		user, err := getUserFromName(opts.Assignee, bot.git)
+		user, err := i.getUserFromName(opts.Assignee)
 		if err != nil {
-			return errors.New("assignee not found")
+			return errAssigneeNotFound
 		}
 
 		assigneeID = user.ID
 	}
 
-	activeRepo, exists := getActiveRepo(msg.Author.ID)
-	if opts.ProjectID == 0 {
-		if exists {
-			opts.ProjectID = getRepo(activeRepo, projects).ID
-		} else {
-			return errors.New("No repo specified and no active repo set")
+	opts.Project = i.getRepo(msg, opts.Project)
+	if opts.Project != "" {
+		if !i.isRepo(opts.Project) {
+			return errInvalidRepo
+		}
+		opts.ProjectID, err = i.getRepoID(opts.Project, msg)
+		if err != nil {
+			return err
 		}
 	}
 	userGit := gitlab.NewClient(nil, asTok)
@@ -75,7 +70,7 @@ func issueAddHandler(bot *Bot, projects []*gitlab.Project, args []string, msg *d
 func parseAddOpts(args []string) (IssuesAddOptions, error) {
 	ret := IssuesAddOptions{}
 	if len(args) < 1 {
-		return ret, errors.New("No parameters specified")
+		return ret, errInsufficientArgs
 	}
 	var noParamText string
 	for _, param := range args {
@@ -92,7 +87,7 @@ func parseAddOpts(args []string) (IssuesAddOptions, error) {
 	}
 	titleAndDesc := strings.SplitN(strings.Trim(noParamText, " "), " -- ", 2)
 	if titleAndDesc[0] == "" {
-		return IssuesAddOptions{}, errors.New("No title specified")
+		return IssuesAddOptions{}, errNoTitleSpecified
 	}
 	ret.Title = titleAndDesc[0]
 	if len(titleAndDesc) == 2 {

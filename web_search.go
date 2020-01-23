@@ -10,6 +10,10 @@ import (
 	"google.golang.org/api/youtube/v3"
 )
 
+var (
+	errUnknownResponse = errors.New("unknown API response type")
+)
+
 const userAgent = "Mozilla/5.0 (Linux; Android 4.0.4; Galaxy Nexus Build/IMM76B) AppleWebKit/535.19 (KHTML, like Gecko) Chrome/18.0.1025.133 Mobile Safari/535.19"
 
 func scrapeWeb(url string) (*goquery.Document, error) {
@@ -96,5 +100,5 @@ func getFirstYTResult(q string) (string, error) {
 		return url, nil
 	}
 
-	return "", errors.New("youtube: unknown kind of first response")
+	return "", errUnknownResponse
 }

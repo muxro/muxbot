@@ -14,7 +14,6 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/xanzy/go-gitlab"
 )
 
 var (
@@ -22,6 +21,10 @@ var (
 	token        = flag.String("token", "none", "Specify the token")
 	googleDevKey = flag.String("gkey", "none", "Specify the google dev key")
 	gitlabToken  = flag.String("glt", "none", "Specify the Gitlab Token")
+
+	// errors
+	errInvalidCommand = errors.New("invalid command")
+	errTooManyArgs    = errors.New("too many arguments")
 
 	// functional stuff
 	prefix = flag.String("prefix", ".", "Specify the bot prefix")
@@ -38,7 +41,7 @@ type CommandHandler func(bot *Bot, message *discordgo.Message, args string) erro
 type SimpleCommandHandler func(args []string) (string, error)
 
 // IssueCommandHandler is the handler for issue commands
-type IssueCommandHandler func(bot *Bot, projects []*gitlab.Project, args []string, msg *discordgo.Message) error
+type IssueCommandHandler func(bot *Bot, args []string, msg *discordgo.Message) error
 
 // CommandMux is an abstraction of the commands and subcommands, to simplify stuff
 type CommandMux struct {
@@ -50,7 +53,6 @@ type Bot struct {
 	ds       *discordgo.Session
 	db       *sql.DB
 	msgHist  *MessageHistory
-	git      *gitlab.Client
 	handlers []MessageHandler
 }
 
@@ -119,10 +121,10 @@ func (cm *CommandMux) SimpleCommand(name string, handler SimpleCommandHandler) {
 }
 
 // IssueCommand wraps the git and projects params to the mux handler
-func (cm *CommandMux) IssueCommand(name string, handler IssueCommandHandler, git *gitlab.Client, projects []*gitlab.Project) {
+func (cm *CommandMux) IssueCommand(name string, handler IssueCommandHandler) {
 	cm.cmds[name] = func(bot *Bot, msg *discordgo.Message, args string) error {
 		parts := strings.Fields(args)
-		return handler(bot, projects, parts, msg)
+		return handler(bot, parts, msg)
 	}
 }
 
@@ -150,7 +152,7 @@ func main() {
 		log.Println("No gitlab token specified, the `issues` and `glkey` commands will be disabled.")
 	}
 
-	err := errors.New("I need this")
+	var err error
 	db, err = sql.Open("sqlite3", "database.db")
 	if err != nil {
 		log.Fatal(err)
@@ -179,6 +181,7 @@ func main() {
 
 	cmds := NewCommandMux()
 	// register commands
+	cmds.Command("e", executeHandler)
 	cmds.SimpleCommand("help", helpHandler)
 	cmds.SimpleCommand("ping", pingHandler)
 	cmds.SimpleCommand("echo", echoHandler)
@@ -190,18 +193,20 @@ func main() {
 	} else {
 		cmds.SimpleCommand("yt", nonExistentHandler)
 	}
+	var issues *Issues
 	if *gitlabToken != "none" {
-		bot.git = gitlab.NewClient(nil, *gitlabToken)
-		cmds.Command("issues", issueHandler)
-		cmds.Command("gitlab-key", gitlabKeyHandler)
-		bot.AddMessageHandler(issueReferenceHandler)
+		issues = NewIssues(*gitlabToken)
+		cmds.Command("issues", issues.issueHandler)
+		cmds.Command("gitlab-key", issues.gitlabKeyHandler)
 	} else {
 		cmds.SimpleCommand("issues", nonExistentHandler)
 		cmds.SimpleCommand("gitlab-key", nonExistentHandler)
 	}
 	cmds.SimpleCommand("regex", regexCommandHandler)
 	bot.AddMessageHandler(CommandMessageHandler(cmds))
-
+	if *gitlabToken != "none" {
+		bot.AddMessageHandler(issues.issueReferenceHandler)
+	}
 	err = dg.Open()
 	if err != nil {
 		log.Fatal(err)

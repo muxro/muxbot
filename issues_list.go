@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -43,7 +42,7 @@ type IssuesSearchOptions struct {
 	Any      bool
 }
 
-func issueListHandler(bot *Bot, projects []*gitlab.Project, args []string, msg *discordgo.Message) error {
+func (i *Issues) issueListHandler(bot *Bot, args []string, msg *discordgo.Message) error {
 	preMessage := ""
 	searchOpts, msgOpts := parseListOpts(args)
 	issueList := []IssuesListOptions{}
@@ -54,13 +53,13 @@ func issueListHandler(bot *Bot, projects []*gitlab.Project, args []string, msg *
 		}
 
 		if selfUname == "" {
-			return errors.New("you mentioned $self, but you don't have a gitlab key associated")
+			return errNoPAC
 		}
 		searchOpts.Assignee = selfUname
 	}
 
-	if searchOpts.Repo != "" && !isRepo(searchOpts.Group+"/"+searchOpts.Repo, projects) {
-		return errors.New("invalid repo")
+	if searchOpts.Repo != "" && !i.isRepo(searchOpts.Group+"/"+searchOpts.Repo) {
+		return errInvalidRepo
 	}
 
 	activeRepo, exists := getActiveRepo(msg.Author.ID)
@@ -73,10 +72,15 @@ func issueListHandler(bot *Bot, projects []*gitlab.Project, args []string, msg *
 		preMessage = fmt.Sprintf("Using active repo %s\n", activeRepo)
 	}
 
+	projects, err := i.getProjects()
+	if err != nil {
+		return err
+	}
+
 	for _, project := range projects {
 		if searchOpts.Group == "" || project.Namespace.Path == searchOpts.Group {
 			if searchOpts.Repo == "" || project.Name == searchOpts.Repo {
-				issues, _, err := bot.git.Issues.ListProjectIssues(project.ID, &gitlab.ListProjectIssuesOptions{Sort: gitlab.String("asc"), Labels: searchOpts.Tags})
+				issues, _, err := i.git.Issues.ListProjectIssues(project.ID, &gitlab.ListProjectIssuesOptions{Sort: gitlab.String("asc"), Labels: searchOpts.Tags})
 				if err != nil {
 					return err
 				}
@@ -109,7 +113,7 @@ func issueListHandler(bot *Bot, projects []*gitlab.Project, args []string, msg *
 		}
 	}
 	if len(issueList) == 0 {
-		return errors.New("No issue found")
+		return errNoIssueFound
 	}
 	issues := []string{}
 	for _, issue := range issueList {

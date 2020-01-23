@@ -1,32 +1,30 @@
 package main
 
 import (
-	"errors"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/xanzy/go-gitlab"
 )
 
-func issuesActiveRepoHandler(bot *Bot, projects []*gitlab.Project, args []string, msg *discordgo.Message) error {
+func (i *Issues) issuesActiveRepoHandler(bot *Bot, args []string, msg *discordgo.Message) error {
 	if len(args) < 1 {
-		return errors.New("not parameters specified")
+		return errInsufficientArgs
 	}
 	switch args[0] {
 	case "set":
 		if len(args) != 2 {
-			return errors.New("not parameters specified")
+			return errInsufficientArgs
 		}
-		if isRepo(args[1], projects) == false {
-			return errors.New("you need to specify a valid repo which you are a member of that the bot can see")
+		if i.isRepo(args[1]) == false {
+			return errNoRepoFound
 		}
 		if strings.ContainsAny(args[1], "/") == false { // we would also like a group name
-			for _, project := range projects {
-				if isSameRepo(args[1], project) {
-					args[1] = project.Namespace.Path + "/" + project.Path
-					break
-				}
+			rawRepo, err := i.getGitlabRepo(args[1], msg)
+			if err != nil {
+				return err
 			}
+			namespace, repo := i.getFullRepoName(rawRepo)
+			args[1] = namespace + "/" + repo
 		}
 		err := setActiveRepo(msg.Author.ID, args[1])
 		if err != nil {
@@ -37,7 +35,7 @@ func issuesActiveRepoHandler(bot *Bot, projects []*gitlab.Project, args []string
 	case "get":
 		repo, exists := getActiveRepo(msg.Author.ID)
 		if exists == false {
-			return errors.New("no active repo set")
+			return errNoActiveRepo
 		}
 		bot.SendReply(msg, "your active repo is "+repo)
 	case "erase":
@@ -48,7 +46,7 @@ func issuesActiveRepoHandler(bot *Bot, projects []*gitlab.Project, args []string
 
 		bot.SendReply(msg, "your active repo has been erased from the database")
 	default:
-		bot.SendReply(msg, "invalid command")
+		return errInvalidCommand
 	}
 	return nil
 }

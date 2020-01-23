@@ -1,8 +1,6 @@
 package main
 
 import (
-	"errors"
-
 	"github.com/bwmarrin/discordgo"
 	"github.com/xanzy/go-gitlab"
 )
@@ -16,14 +14,14 @@ type IssuesModifyOptions struct {
 	Assignee   string
 }
 
-func issueModifyHandler(bot *Bot, projects []*gitlab.Project, args []string, msg *discordgo.Message) error {
+func (i *Issues) issueModifyHandler(bot *Bot, args []string, msg *discordgo.Message) error {
 
 	asTok, exists := associatedKey(msg.Author.ID)
 	if exists == false {
-		return errors.New("you don't have a gitlab Personal Access Token associated with your account")
+		return errNoPAC
 	}
 	if len(args) < 1 {
-		return errors.New("not enough parameters")
+		return errInsufficientArgs
 	}
 
 	opts, err := parseModifyOpts(args)
@@ -31,17 +29,14 @@ func issueModifyHandler(bot *Bot, projects []*gitlab.Project, args []string, msg
 		return err
 	}
 
-	if opts.Repo == "" {
-		activeRepo, exists := getActiveRepo(msg.Author.ID)
-		if exists {
-			opts.Repo = activeRepo
-		} else {
-			return errors.New("you need to specify either an active repo or a repo to search in")
-		}
-	}
+	opts.Repo = i.getRepo(msg, opts.Repo)
 
 	userGit := gitlab.NewClient(nil, asTok)
-	pid := getRepo(opts.Repo, projects).ID
+	pid, err := i.getRepoID(opts.Repo, msg)
+	if err != nil {
+		return err
+	}
+
 	issue, _, err := userGit.Issues.GetIssue(pid, opts.ID)
 	if err != nil {
 		return err
@@ -59,9 +54,9 @@ func issueModifyHandler(bot *Bot, projects []*gitlab.Project, args []string, msg
 	}
 	updateOpts := &gitlab.UpdateIssueOptions{}
 	if opts.Assignee != "" {
-		user, err := getUserFromName(opts.Assignee, bot.git)
+		user, err := i.getUserFromName(opts.Assignee)
 		if err != nil || user == nil {
-			return errors.New("could not find user")
+			return errNoUserFound
 		}
 
 		updateOpts.AssigneeIDs = []int{user.ID}
