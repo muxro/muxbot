@@ -14,7 +14,7 @@ var (
 	errNoPAC            = errors.New("you don't have a gitlab Personal Access Token (PAC) associated with your account")
 	errNoRepoSpecified  = errors.New("you need to specify either an active repo or a repo to search in")
 	errNoRepoFound      = errors.New("you need to specify a valid repo which you are a member of that the bot can see")
-	errNoActiveRepo     = errors.New("no active repo set")
+	errNoActiveRepo     = errors.New("no channel active repo set")
 	errNoUserFound      = errors.New("user not found")
 	errInvalidRepo      = errors.New("invalid repo")
 	errAssigneeNotFound = errors.New("assignee not found")
@@ -44,7 +44,7 @@ func (i *Issues) issueHandler(bot *Bot, msg *discordgo.Message, args string) err
 	issueMux := NewCommandMux()
 	issueMux.IssueCommand("list", i.issueListHandler)
 	issueMux.IssueCommand("add", i.issueAddHandler)
-	issueMux.IssueCommand("activeRepo", i.issuesActiveRepoHandler)
+	issueMux.IssueCommand("active-repo", i.issuesActiveRepoHandler)
 	issueMux.IssueCommand("modify", i.issueModifyHandler)
 	issueMux.IssueCommand("close", i.issueCloseHandler)
 
@@ -74,7 +74,7 @@ func (i *Issues) getGitlabRepo(name string, message *discordgo.Message) (*gitlab
 		}
 	}
 
-	activeRepo, exists := getActiveRepo(message.Author.ID)
+	activeRepo, exists := getActiveRepo(message.ChannelID)
 	if exists == false {
 		return nil, errNoRepoFound
 	}
@@ -91,7 +91,7 @@ func (i *Issues) getRepo(message *discordgo.Message, repo string) string {
 		repo = parts[0]
 	}
 	if repo == "" {
-		activeRepo, exists := getActiveRepo(message.Author.ID)
+		activeRepo, exists := getActiveRepo(message.ChannelID)
 		if !exists {
 			return ""
 		}

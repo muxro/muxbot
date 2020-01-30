@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-
-	"github.com/Knetic/govaluate"
 )
 
 func helpHandler(args []string) (string, error) {
@@ -18,21 +16,6 @@ func pingHandler(args []string) (string, error) {
 
 func echoHandler(args []string) (string, error) {
 	return strings.Join(args, " "), nil
-}
-
-func evalHandler(args []string) (string, error) {
-	commandMessage := strings.Join(args, " ")
-	expr, err := govaluate.NewEvaluableExpression(commandMessage)
-	if err != nil {
-		return "", err
-	}
-
-	result, err := expr.Evaluate(nil)
-	if err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf("%v", result), nil
 }
 
 func gHandler(args []string) (string, error) {

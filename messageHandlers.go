@@ -37,12 +37,12 @@ func (i *Issues) issueReferenceHandler(bot *Bot, message *discordgo.Message) (bo
 	for _, match := range matches {
 		repo := i.getRepo(message, match[1])
 		if repo == "" {
-			return true, errNoRepoFound
+			return false, nil
 		}
 
 		issueid, err := strconv.Atoi(match[4])
 		if err != nil {
-			return true, errInvalidID
+			return false, nil
 		}
 
 		namespace := strings.SplitN(repo, "/", 2)[0]
@@ -54,7 +54,7 @@ func (i *Issues) issueReferenceHandler(bot *Bot, message *discordgo.Message) (bo
 
 		issue, err := i.getIssue(message, issueid, repo)
 		if err != nil {
-			return true, err
+			return false, nil
 		}
 
 		issues = append(issues, issue)

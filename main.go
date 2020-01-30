@@ -21,6 +21,7 @@ var (
 	token        = flag.String("token", "none", "Specify the token")
 	googleDevKey = flag.String("gkey", "none", "Specify the google dev key")
 	gitlabToken  = flag.String("glt", "none", "Specify the Gitlab Token")
+	executeToken = flag.String("exToken", "none", "Specify the absolute path to the eval directory")
 
 	// errors
 	errInvalidCommand = errors.New("invalid command")
@@ -86,10 +87,12 @@ func (mh *MessageHistory) Add(msg, reply *discordgo.Message) {
 func (cm *CommandMux) Handle(bot *Bot, msg *discordgo.Message) error {
 	content := msg.Content
 	content = strings.TrimPrefix(content, *prefix)
-	parts := strings.SplitN(content, " ", 2)
-	cmd, args := parts[0], ""
-	if len(parts) > 1 {
-		args = parts[1]
+	idx := strings.IndexAny(content, " \n\t")
+	var cmd, args string
+	if idx == -1 {
+		cmd = content
+	} else {
+		cmd, args = content[:idx], content[idx:]
 	}
 
 	handler, ok := cm.cmds[cmd]
@@ -139,6 +142,7 @@ func main() {
 	getEnvVar("token", token)
 	getEnvVar("gkey", googleDevKey)
 	getEnvVar("glt", gitlabToken)
+	getEnvVar("exToken", executeToken)
 
 	if *token == "none" {
 		log.Fatal("No discord token specified, can't run the bot without it.")
@@ -150,6 +154,10 @@ func main() {
 
 	if *gitlabToken == "none" {
 		log.Println("No gitlab token specified, the `issues` and `glkey` commands will be disabled.")
+	}
+
+	if *executeToken == "none" {
+		log.Println("No execute path specified, the `e` command will be disabled")
 	}
 
 	var err error
@@ -181,11 +189,14 @@ func main() {
 
 	cmds := NewCommandMux()
 	// register commands
-	cmds.Command("e", executeHandler)
+	if *executeToken != "none" {
+		cmds.Command("e", executeHandler)
+	} else {
+		cmds.SimpleCommand("e", nonExistentHandler)
+	}
 	cmds.SimpleCommand("help", helpHandler)
 	cmds.SimpleCommand("ping", pingHandler)
 	cmds.SimpleCommand("echo", echoHandler)
-	cmds.SimpleCommand("eval", evalHandler)
 	cmds.SimpleCommand("g", gHandler)
 	cmds.SimpleCommand("gis", gisHandler)
 	if *googleDevKey != "none" {

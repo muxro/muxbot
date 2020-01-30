@@ -26,20 +26,20 @@ func (i *Issues) issuesActiveRepoHandler(bot *Bot, args []string, msg *discordgo
 			namespace, repo := i.getFullRepoName(rawRepo)
 			args[1] = namespace + "/" + repo
 		}
-		err := setActiveRepo(msg.Author.ID, args[1])
+		err := setActiveRepo(msg.ChannelID, args[1])
 		if err != nil {
 			return err
 		}
 
 		bot.SendReply(msg, "set active repo "+args[1])
 	case "get":
-		repo, exists := getActiveRepo(msg.Author.ID)
+		repo, exists := getActiveRepo(msg.ChannelID)
 		if exists == false {
 			return errNoActiveRepo
 		}
-		bot.SendReply(msg, "your active repo is "+repo)
+		bot.SendReply(msg, "the channel's active repo is "+repo)
 	case "erase":
-		err := removeActiveRepo(msg.Author.ID)
+		err := removeActiveRepo(msg.ChannelID)
 		if err != nil {
 			return err
 		}

@@ -62,7 +62,7 @@ func (i *Issues) issueListHandler(bot *Bot, args []string, msg *discordgo.Messag
 		return errInvalidRepo
 	}
 
-	activeRepo, exists := getActiveRepo(msg.Author.ID)
+	activeRepo, exists := getActiveRepo(msg.ChannelID)
 	if searchOpts.Any == false && searchOpts.Group == "" && searchOpts.Repo == "" && exists == true {
 		repoData := strings.SplitN(activeRepo, "/", 2)
 		searchOpts.Group = repoData[0]

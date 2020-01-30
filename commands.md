@@ -10,10 +10,6 @@
     - `echo` replies back with the text sent by the user. There aren't many use cases for it but it's a nice-to-have.
     - Usage: `.echo <text>`
 
-* `.eval`
-    - `eval` uses [govaluate](https://github.com/Knetic/govaluate) for evaluating simple mathematical expressions.
-    - Usage: `.eval <expression>`
-
 * `.g`
     - `g` scrapes the first web result on dogpile.com (a search engine based on bing) for the desired query with the link and the description of the result. Even though it's not google, it returns on-topic results.
     - Usage: `.g <query>`
@@ -56,15 +52,19 @@
             - `+tag`: adds the specified tag
             - `-tag`: removes the specified tag (if it doesn't exist it isn't a problem)
 
-    - `.issues activeRepo` is a command used for setting the repository that the user is working on.
-        - Usage: `.issues activeRepo <get/set/erase>`
-        - `.issues activeRepo get` displays the active repository for the user that requested the command
-        - `.issues activeRepo set <repo>` sets the active repository for the requesting user
-        - `.issues activeRepo erase` removes the active repository for the requesting user
+    - `.issues active-repo` is a command used for setting the repository that the channel is working on.
+        - Usage: `.issues active-repo <get/set/erase>`
+        - `.issues active-repo get` displays the active repository for the channel in which the command was requested
+        - `.issues active-repo set <repo>` sets the active repository for the requesting channel
+        - `.issues active-repo erase` removes the active repository for the requesting channel
 
 * `.gitlab-key`
     - `gitlab-key` associates a discord user with a personal access token and is used by `.issues` when `list`ing issues assigned to `$self` and `add`ing issues
     - Usage: `.gitlab-key <personal access token>`
+
+* `.e`
+    - `e` executes some code with a supported language. Visit [the evaluator's github repo]() to see all supported languages as this list is evolving
+    - Usage: `.e <language> ```code``` [```standard input```]`
 
 * `.todo`
     - `todo` doesn't exist anymore, but I am leaving this here as an homage to it: my first big command I implemented. Thank you for your service <3
