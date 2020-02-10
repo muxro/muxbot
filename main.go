@@ -194,6 +194,7 @@ func main() {
 	} else {
 		cmds.SimpleCommand("e", nonExistentHandler)
 	}
+	cmds.Command("ghtrends", ghTrends)
 	cmds.SimpleCommand("help", helpHandler)
 	cmds.SimpleCommand("ping", pingHandler)
 	cmds.SimpleCommand("echo", echoHandler)

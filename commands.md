@@ -66,5 +66,9 @@
     - `e` executes some code with a supported language. Visit [the evaluator's github repo]() to see all supported languages as this list is evolving
     - Usage: `.e <language> ```code``` [```standard input```]`
 
+* `.ghtrends`
+    - `ghtrends` queries a GitHub trends API and returns 10 results in an embed
+    - You can specify the date (`daily`, `weekly`, `monthly`) and the language (`js`, `c++`, etc) in any order, but only the last language will be counted if you include more than one. 
+
 * `.todo`
     - `todo` doesn't exist anymore, but I am leaving this here as an homage to it: my first big command I implemented. Thank you for your service <3
