@@ -31,22 +31,24 @@ func (i *Issues) issuesActiveRepoHandler(bot *Bot, args []string, msg *discordgo
 			return err
 		}
 
-		bot.SendReply(msg, "set active repo "+args[1])
+		_, err = bot.SendReply(msg, "set active repo "+args[1])
+		return err
 	case "get":
 		repo, exists := getActiveRepo(msg.ChannelID)
 		if exists == false {
 			return errNoActiveRepo
 		}
-		bot.SendReply(msg, "the channel's active repo is "+repo)
+		_, err := bot.SendReply(msg, "the channel's active repo is "+repo)
+		return err
 	case "erase":
 		err := removeActiveRepo(msg.ChannelID)
 		if err != nil {
 			return err
 		}
 
-		bot.SendReply(msg, "your active repo has been erased from the database")
+		_, err = bot.SendReply(msg, "the channel's active repo has been erased from the database")
+		return err
 	default:
 		return errInvalidCommand
 	}
-	return nil
 }

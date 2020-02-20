@@ -148,9 +148,9 @@ func (i *Issues) issueListHandler(bot *Bot, args []string, msg *discordgo.Messag
 		issues = append(issues, issueText)
 	}
 
-	bot.SendReplyEmbed(msg, &discordgo.MessageEmbed{Description: preMessage + strings.Join(issues, "\n")})
+	_, err = bot.SendReplyEmbed(msg, &discordgo.MessageEmbed{Description: preMessage + strings.Join(issues, "\n")})
 
-	return nil
+	return err
 }
 
 func parseListOpts(args []string) (IssuesSearchOptions, IssueMsgOptions) {

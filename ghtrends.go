@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/davecgh/go-spew/spew"
 )
 
 var (
@@ -19,8 +20,10 @@ var (
 
 func ghTrends(bot *Bot, msg *discordgo.Message, args string) error {
 	var trendsFields []*discordgo.MessageEmbedField
-	parts := strings.Split(args[1:], " ")
-
+	var parts []string
+	if len(args) > 1 {
+		parts = strings.Split(args[1:], " ")
+	}
 	// get send params
 	base, _ := url.Parse(ghTrendsBaseURL)
 	base.Path += "repositories"
@@ -54,13 +57,36 @@ func ghTrends(bot *Bot, msg *discordgo.Message, args string) error {
 		field.Name = fmt.Sprintf("%s: %s",
 			project.(map[string]interface{})["name"].(string),
 			project.(map[string]interface{})["url"].(string))
-		field.Value = project.(map[string]interface{})["description"].(string)
+		if len(field.Name) > 255 {
+			field.Name = project.(map[string]interface{})["url"].(string)
+			if len(field.Name) > 1023 {
+				field.Value = "name too long"
+				trendsFields = append(trendsFields, field)
+				continue
+			}
+			field.Value = "Name: " + project.(map[string]interface{})["name"].(string) + "\n"
+		}
+		field.Value += project.(map[string]interface{})["description"].(string)
+		for len(field.Value) > 1024 {
+			lastSpace := strings.LastIndexAny(field.Value, " \t\n")
+			if lastSpace == -1 {
+				field.Value = field.Value[:1000] + "..."
+			} else {
+				field.Value = field.Value[:lastSpace]
+				field.Value += "..."
+			}
+		}
+		if field.Value == "" {
+			field.Value = "No description provided"
+		}
+		// field.Name = "A"
+		// field.Value = "B"
 		trendsFields = append(trendsFields, field)
 		if len(trendsFields) > 9 {
 			break
 		}
 	}
-
-	bot.SendReplyEmbed(msg, &discordgo.MessageEmbed{Fields: trendsFields})
-	return nil
+	spew.Dump(trendsFields)
+	_, err = bot.SendReplyEmbed(msg, &discordgo.MessageEmbed{Fields: trendsFields})
+	return err
 }

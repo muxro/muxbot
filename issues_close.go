@@ -34,6 +34,6 @@ func (i *Issues) issueCloseHandler(bot *Bot, args []string, msg *discordgo.Messa
 		return err
 	}
 
-	bot.SendReply(msg, fmt.Sprintf("Closed <%s>", gitIssue.WebURL))
-	return nil
+	_, err = bot.SendReply(msg, fmt.Sprintf("Closed <%s>", gitIssue.WebURL))
+	return err
 }

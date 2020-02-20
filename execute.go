@@ -66,11 +66,8 @@ func executeHandler(bot *Bot, msg *discordgo.Message, key string) error {
 	// fmt.Printf("%d %q %q\n", lang, code, stdin)
 	bot.SendReply(msg, "Output: \n```\nRunning...\n```")
 	err := run(bot, msg, lang, code, stdin)
-	if err != nil {
-		return err
-	}
 
-	return nil
+	return err
 }
 
 func run(bot *Bot, msg *discordgo.Message, language string, code string, stdin string) error {
@@ -104,6 +101,6 @@ func run(bot *Bot, msg *discordgo.Message, language string, code string, stdin s
 	if err != nil {
 		return err
 	}
-	bot.SendReply(msg, "Output:\n```"+language+"\n"+string(output)+"```")
-	return nil
+	_, err = bot.SendReply(msg, "Output:\n```"+language+"\n"+string(output)+"```")
+	return err
 }

@@ -67,8 +67,8 @@ func (i *Issues) issueModifyHandler(bot *Bot, args []string, msg *discordgo.Mess
 		return err
 	}
 
-	bot.SendReply(msg, "Issue successfully modified.")
-	return nil
+	_, err = bot.SendReply(msg, "Issue successfully modified.")
+	return err
 }
 
 func parseModifyOpts(args []string) (IssuesModifyOptions, error) {

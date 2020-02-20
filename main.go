@@ -245,7 +245,7 @@ func (b *Bot) onMessage(message *discordgo.Message) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			b.SendReply(message, "something went wrong...")
+			b.SendReply(message, "something went wrong... pinging <@195202549647671297>")
 			fmt.Println(r, string(debug.Stack()))
 		}
 	}()

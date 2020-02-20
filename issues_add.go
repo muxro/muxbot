@@ -63,8 +63,8 @@ func (i *Issues) issueAddHandler(bot *Bot, args []string, msg *discordgo.Message
 		return err
 	}
 
-	bot.SendReply(msg, fmt.Sprintf("created issue <%s>", issue.WebURL))
-	return nil
+	_, err = bot.SendReply(msg, fmt.Sprintf("created issue <%s>", issue.WebURL))
+	return err
 }
 
 func parseAddOpts(args []string) (IssuesAddOptions, error) {

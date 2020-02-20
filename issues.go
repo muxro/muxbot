@@ -182,16 +182,16 @@ func (i *Issues) gitlabKeyHandler(bot *Bot, msg *discordgo.Message, key string) 
 
 	result, ok := testKey(key)
 	if ok == true {
-		err := associateUserToToken(msg.Author.ID, key)
+		err = associateUserToToken(msg.Author.ID, key)
 		if err != nil {
 			return err
 		}
 
-		bot.SendReply(msg, preMessage+"Associated user with gitlab user "+result.Name)
+		_, err = bot.SendReply(msg, preMessage+"Associated user with gitlab user "+result.Name)
 	} else {
-		bot.SendReply(msg, "Invalid key")
+		_, err = bot.SendReply(msg, "Invalid key")
 	}
-	return nil
+	return err
 }
 
 func (i *Issues) getUserFromName(username string) (*gitlab.User, error) {
