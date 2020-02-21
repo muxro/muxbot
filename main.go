@@ -19,7 +19,6 @@ import (
 var (
 	// tokens
 	token        = flag.String("token", "none", "Specify the token")
-	googleDevKey = flag.String("gkey", "none", "Specify the google dev key")
 	gitlabToken  = flag.String("glt", "none", "Specify the Gitlab Token")
 	executeToken = flag.String("exToken", "none", "Specify the absolute path to the eval directory")
 
@@ -140,16 +139,11 @@ func main() {
 	flag.Parse()
 
 	getEnvVar("token", token)
-	getEnvVar("gkey", googleDevKey)
 	getEnvVar("glt", gitlabToken)
 	getEnvVar("exToken", executeToken)
 
 	if *token == "none" {
 		log.Fatal("No discord token specified, can't run the bot without it.")
-	}
-
-	if *googleDevKey == "none" {
-		log.Println("No google dev key specified, `yt` command will be disabled.")
 	}
 
 	if *gitlabToken == "none" {
@@ -200,11 +194,8 @@ func main() {
 	cmds.SimpleCommand("echo", echoHandler)
 	cmds.SimpleCommand("g", gHandler)
 	cmds.SimpleCommand("gis", gisHandler)
-	if *googleDevKey != "none" {
-		cmds.SimpleCommand("yt", ytHandler)
-	} else {
-		cmds.SimpleCommand("yt", nonExistentHandler)
-	}
+	cmds.SimpleCommand("yt", ytHandler)
+
 	var issues *Issues
 	if *gitlabToken != "none" {
 		issues = NewIssues(*gitlabToken)

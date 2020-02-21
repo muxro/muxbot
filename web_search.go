@@ -2,12 +2,12 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/PuerkitoBio/goquery"
-	"google.golang.org/api/googleapi/transport"
-	"google.golang.org/api/youtube/v3"
 )
 
 var (
@@ -71,34 +71,18 @@ func scrapeFirstImgRes(q string) (string, error) {
 	return url, nil
 }
 
-func getFirstYTResult(q string) (string, error) {
-	client := &http.Client{
-		Transport: &transport.APIKey{Key: *googleDevKey},
-	}
-
-	service, err := youtube.New(client)
+func scrapeFirstVideoRes(q string) (string, error) {
+	url := "https://www.dogpile.com/serp?qc=video&q=" + url.QueryEscape(q)
+	doc, err := scrapeWeb(url)
 	if err != nil {
 		return "", err
 	}
 
-	call := service.Search.List("id,snippet").Q(q)
-	response, err := call.Do()
-	if err != nil {
-		return "", err
-	}
+	results := doc.Find(".layout__mainline").First()
 
-	first := response.Items[0]
-	switch first.Id.Kind {
-	case "youtube#video":
-		url := "https://youtube.com/watch?v=" + first.Id.VideoId
-		return url, nil
-	case "youtube#channel":
-		url := "https://youtube.com/channel/" + first.Id.ChannelId
-		return url, nil
-	case "youtube#playlist":
-		url := "https://youtube.com/playlist?list=" + first.Id.PlaylistId
-		return url, nil
-	}
+	first := results.Find(".video").First()
+	anchor := first.Find("a").First()
+	url, _ = anchor.Attr("href")
 
-	return "", errUnknownResponse
+	return fmt.Sprintf("%s -- %s", strings.TrimSpace(anchor.Text()), url), nil
 }

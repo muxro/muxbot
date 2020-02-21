@@ -40,7 +40,7 @@ func gisHandler(args []string) (string, error) {
 
 func ytHandler(args []string) (string, error) {
 	commandMessage := strings.Join(args, " ")
-	res, err := getFirstYTResult(commandMessage)
+	res, err := scrapeFirstVideoRes(commandMessage)
 	if err != nil {
 		return "", err
 	}
