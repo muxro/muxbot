@@ -25,13 +25,14 @@ var (
 
 // Issues is the main wrapper for all issue related
 type Issues struct {
-	git *gitlab.Client
+	git   *gitlab.Client
+	token string
 }
 
 // NewIssues initializes a new Issues instance
 func NewIssues(key string) *Issues {
 	return &Issues{
-		git: gitlab.NewClient(nil, *gitlabToken),
+		git: gitlab.NewClient(nil, key),
 	}
 }
 

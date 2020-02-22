@@ -196,11 +196,11 @@ func main() {
 	cmds.SimpleCommand("gis", gisHandler)
 	cmds.SimpleCommand("yt", ytHandler)
 
-	var issues *Issues
+	var issueHandler *Issues
 	if *gitlabToken != "none" {
-		issues = NewIssues(*gitlabToken)
-		cmds.Command("issues", issues.issueHandler)
-		cmds.Command("gitlab-key", issues.gitlabKeyHandler)
+		issueHandler = NewIssues(*gitlabToken)
+		cmds.Command("issues", issueHandler.issueHandler)
+		cmds.Command("gitlab-key", issueHandler.gitlabKeyHandler)
 	} else {
 		cmds.SimpleCommand("issues", nonExistentHandler)
 		cmds.SimpleCommand("gitlab-key", nonExistentHandler)
@@ -208,7 +208,7 @@ func main() {
 	cmds.SimpleCommand("regex", regexCommandHandler)
 	bot.AddMessageHandler(CommandMessageHandler(cmds))
 	if *gitlabToken != "none" {
-		bot.AddMessageHandler(issues.issueReferenceHandler)
+		bot.AddMessageHandler(issueHandler.issueReferenceHandler)
 	}
 	err = dg.Open()
 	if err != nil {
