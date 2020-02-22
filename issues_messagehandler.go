@@ -14,17 +14,6 @@ var (
 	issueRegex = regexp.MustCompile(`(([^/\s]+/)?([^\s]+))?#(\d+)`)
 )
 
-// CommandMessageHandler is a wrapper for command handling
-func CommandMessageHandler(cmds *CommandMux) MessageHandler {
-	return func(b *Bot, message *discordgo.Message) (bool, error) {
-		if !strings.HasPrefix(message.Content, *prefix) {
-			return false, nil
-		}
-
-		return true, cmds.Handle(b, message)
-	}
-}
-
 func (i *Issues) issueReferenceHandler(bot *Bot, message *discordgo.Message) (bool, error) {
 	matches := issueRegex.FindAllStringSubmatch(message.Content, -1)
 	if len(matches) == 0 {
