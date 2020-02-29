@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/davecgh/go-spew/spew"
 )
 
 var (
@@ -35,6 +34,8 @@ func ghTrends(bot *Bot, msg *discordgo.Message, args string) error {
 			params.Add("language", part)
 		}
 	}
+	// for now, we just want the language
+	params.Set("spoken_language_code", "en")
 	base.RawQuery = params.Encode()
 
 	resp, err := http.Get(base.String())
@@ -79,14 +80,11 @@ func ghTrends(bot *Bot, msg *discordgo.Message, args string) error {
 		if field.Value == "" {
 			field.Value = "No description provided"
 		}
-		// field.Name = "A"
-		// field.Value = "B"
 		trendsFields = append(trendsFields, field)
 		if len(trendsFields) > 9 {
 			break
 		}
 	}
-	spew.Dump(trendsFields)
 	_, err = bot.SendReplyEmbed(msg, &discordgo.MessageEmbed{Fields: trendsFields})
 	return err
 }

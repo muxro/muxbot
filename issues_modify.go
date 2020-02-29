@@ -14,11 +14,10 @@ type IssuesModifyOptions struct {
 	Assignee   string
 }
 
-func (i *Issues) issueModifyHandler(bot *Bot, args []string, msg *discordgo.Message) error {
-
-	asTok, exists := associatedKey(msg.Author.ID)
-	if exists == false {
-		return errNoPAC
+func issueModifyHandler(bot *Bot, args []string, msg *discordgo.Message) error {
+	git, err := getUserGit(msg)
+	if err != nil {
+		return err
 	}
 	if len(args) < 1 {
 		return errInsufficientArgs
@@ -29,15 +28,14 @@ func (i *Issues) issueModifyHandler(bot *Bot, args []string, msg *discordgo.Mess
 		return err
 	}
 
-	opts.Repo = i.getRepo(msg, opts.Repo)
+	opts.Repo = getRepo(git, msg, opts.Repo)
 
-	userGit := gitlab.NewClient(nil, asTok)
-	pid, err := i.getRepoID(opts.Repo, msg)
+	pid, err := getRepoID(git, opts.Repo, msg)
 	if err != nil {
 		return err
 	}
 
-	issue, _, err := userGit.Issues.GetIssue(pid, opts.ID)
+	issue, _, err := git.Issues.GetIssue(pid, opts.ID)
 	if err != nil {
 		return err
 	}
@@ -54,7 +52,7 @@ func (i *Issues) issueModifyHandler(bot *Bot, args []string, msg *discordgo.Mess
 	}
 	updateOpts := &gitlab.UpdateIssueOptions{}
 	if opts.Assignee != "" {
-		user, err := i.getUserFromName(opts.Assignee)
+		user, err := getUserFromName(git, opts.Assignee)
 		if err != nil || user == nil {
 			return errNoUserFound
 		}
@@ -62,7 +60,7 @@ func (i *Issues) issueModifyHandler(bot *Bot, args []string, msg *discordgo.Mess
 		updateOpts.AssigneeIDs = []int{user.ID}
 	}
 	updateOpts.Labels = &newTags
-	issue, _, err = userGit.Issues.UpdateIssue(pid, opts.ID, updateOpts)
+	issue, _, err = git.Issues.UpdateIssue(pid, opts.ID, updateOpts)
 	if err != nil {
 		return err
 	}

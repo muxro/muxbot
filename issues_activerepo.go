@@ -6,7 +6,11 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-func (i *Issues) issuesActiveRepoHandler(bot *Bot, args []string, msg *discordgo.Message) error {
+func issuesActiveRepoHandler(bot *Bot, args []string, msg *discordgo.Message) error {
+	git, err := getUserGit(msg)
+	if err != nil {
+		return err
+	}
 	if len(args) < 1 {
 		return errInsufficientArgs
 	}
@@ -15,15 +19,15 @@ func (i *Issues) issuesActiveRepoHandler(bot *Bot, args []string, msg *discordgo
 		if len(args) != 2 {
 			return errInsufficientArgs
 		}
-		if i.isRepo(args[1]) == false {
+		if isRepo(git, args[1]) == false {
 			return errNoRepoFound
 		}
 		if strings.ContainsAny(args[1], "/") == false { // we would also like a group name
-			rawRepo, err := i.getGitlabRepo(args[1], msg)
+			rawRepo, err := getGitlabRepo(git, args[1], msg)
 			if err != nil {
 				return err
 			}
-			namespace, repo := i.getFullRepoName(rawRepo)
+			namespace, repo := getFullRepoName(rawRepo)
 			args[1] = namespace + "/" + repo
 		}
 		err := setActiveRepo(msg.ChannelID, args[1])

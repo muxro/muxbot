@@ -16,7 +16,7 @@ var (
 	errUnsupportedLanguage = errors.New("language is not in the supported list")
 )
 
-func executeHandler(bot *Bot, msg *discordgo.Message, key string) error {
+func executeHandler(bot *Bot, msg *discordgo.Message, args string) error {
 	md := blackfriday.New()
 	node := md.Parse([]byte(msg.Content))
 
@@ -85,19 +85,19 @@ func run(bot *Bot, msg *discordgo.Message, language string, code string, stdin s
 		return err
 	}
 
-	cmd := exec.Command(*executeToken+"eval.sh", language, codePath, stdinPath)
-	cmd.Dir = *executeToken
+	cmd := exec.Command(*evalPath+"eval.sh", language, codePath, stdinPath)
+	cmd.Dir = *evalPath
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		bot.SendReply(msg, fmt.Sprintf("%s\n%s", string(out), err))
 		return nil
 	}
-	errors, err = ioutil.ReadFile(*executeToken + "result/build-error")
+	errors, err = ioutil.ReadFile(*evalPath + "result/build-error")
 	if len(errors) > 2 {
 		bot.SendReply(msg, "compile error: "+string(errors))
 		return nil
 	}
-	output, err = ioutil.ReadFile(*executeToken + "result/out")
+	output, err = ioutil.ReadFile(*evalPath + "result/out")
 	if err != nil {
 		return err
 	}

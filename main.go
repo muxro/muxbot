@@ -17,10 +17,15 @@ import (
 )
 
 var (
+	version = "0.1.0"
+	// data regarding the .e command
+	evalDisabled    bool
+	defaultEvalPath = ""
+
 	// tokens
-	token        = flag.String("token", "none", "Specify the token")
-	gitlabToken  = flag.String("glt", "none", "Specify the Gitlab Token")
-	executeToken = flag.String("exToken", "none", "Specify the absolute path to the eval directory")
+	token     = flag.String("token", "", "Specify the token")
+	evalPath  = flag.String("evalPath", "", "Specify the absolute path to the eval directory")
+	debugMode = flag.Bool("debugMode", false, "Specify if the bot is in debug mode")
 
 	// errors
 	errInvalidCommand = errors.New("invalid command")
@@ -54,6 +59,7 @@ type Bot struct {
 	db       *sql.DB
 	msgHist  *MessageHistory
 	handlers []MessageHandler
+	debug    bool
 }
 
 // MessageHistory is stores the last max messages to update if the original message is edited
@@ -138,29 +144,42 @@ func (cm *CommandMux) Command(name string, handler CommandHandler) {
 func main() {
 	flag.Parse()
 
-	getEnvVar("token", token)
-	getEnvVar("glt", gitlabToken)
-	getEnvVar("exToken", executeToken)
+	if *token == "" {
+		getEnvVar("token", token)
+	}
+	if *evalPath == "" {
+		getEnvVar("evalPath", evalPath)
+	}
 
-	if *token == "none" {
+	// Check for debug mode env var regardless if the flag is set
+	_, exists := os.LookupEnv("debugMode")
+	if exists {
+		*debugMode = true
+	}
+
+	if *token == "" {
 		log.Fatal("No discord token specified, can't run the bot without it.")
 	}
 
-	if *gitlabToken == "none" {
-		log.Println("No gitlab token specified, the `issues` and `glkey` commands will be disabled.")
-	}
-
-	if *executeToken == "none" {
-		log.Println("No execute path specified, the `e` command will be disabled")
+	if *evalPath == "" {
+		if defaultEvalPath != "" {
+			*evalPath = defaultEvalPath
+			log.Println("Using hardcoded `.e` path")
+		} else {
+			log.Println("No execute path specified, the `e` command will be disabled")
+			evalDisabled = true
+		}
 	}
 
 	var err error
+	log.Println("Init DB")
 	db, err = sql.Open("sqlite3", "database.db")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer db.Close()
 
+	log.Println("Making sure tables exist")
 	_, err = db.Exec("CREATE TABLE IF NOT EXISTS gitlabKeys (dtag varchar(512) UNIQUE, key varchar(512));")
 	if err != nil {
 		log.Fatal(err)
@@ -170,6 +189,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	log.Println("Init discord session")
 	dg, err := discordgo.New("Bot " + *token)
 	if err != nil {
 		log.Fatalln("Could not create Discord session: ", err)
@@ -178,12 +199,14 @@ func main() {
 	bot := Bot{ds: dg,
 		db:      db,
 		msgHist: NewMessageHistory(100),
+		debug:   *debugMode,
 	}
 	bot.registerDiscordHandlers()
 
+	log.Println("Init commands")
 	cmds := NewCommandMux()
 	// register commands
-	if *executeToken != "none" {
+	if !evalDisabled {
 		cmds.Command("e", executeHandler)
 	} else {
 		cmds.SimpleCommand("e", nonExistentHandler)
@@ -195,27 +218,19 @@ func main() {
 	cmds.SimpleCommand("g", gHandler)
 	cmds.SimpleCommand("gis", gisHandler)
 	cmds.SimpleCommand("yt", ytHandler)
-
-	var issueHandler *Issues
-	if *gitlabToken != "none" {
-		issueHandler = NewIssues(*gitlabToken)
-		cmds.Command("issues", issueHandler.issueHandler)
-		cmds.Command("gitlab-key", issueHandler.gitlabKeyHandler)
-	} else {
-		cmds.SimpleCommand("issues", nonExistentHandler)
-		cmds.SimpleCommand("gitlab-key", nonExistentHandler)
-	}
+	cmds.Command("issues", issueHandler)
+	cmds.Command("gitlab-key", gitlabKeyHandler)
 	cmds.SimpleCommand("regex", regexCommandHandler)
 	bot.AddMessageHandler(CommandMessageHandler(cmds))
-	if *gitlabToken != "none" {
-		bot.AddMessageHandler(issueHandler.issueReferenceHandler)
-	}
+	bot.AddMessageHandler(issueReferenceHandler)
+
+	cmds.Command("t", testHandler)
+
+	log.Println("Connecting to Discord")
 	err = dg.Open()
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	log.Println("Running MuxBot. Press Ctrl+C to exit")
 
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
@@ -236,8 +251,8 @@ func (b *Bot) onMessage(message *discordgo.Message) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			b.SendReply(message, "something went wrong... pinging <@195202549647671297>")
-			fmt.Println(r, string(debug.Stack()))
+			b.SendReply(message, "something went wrong... pinging <@!195202549647671297>")
+			log.Println(r, string(debug.Stack()))
 		}
 	}()
 
@@ -253,6 +268,7 @@ func (b *Bot) onMessage(message *discordgo.Message) {
 }
 
 func (b *Bot) onReady(s *discordgo.Session, event *discordgo.Ready) {
+	log.Printf("Logged in as %s", event.User.String())
 	s.UpdateStatus(0, "I'm alive! Use "+*prefix+"help for a list of commands")
 }
 
@@ -305,6 +321,14 @@ func (b *Bot) onMessageCreate(session *discordgo.Session, message *discordgo.Mes
 
 func (b *Bot) onMessageEdit(session *discordgo.Session, message *discordgo.MessageUpdate) {
 	b.onMessage(message.Message)
+}
+
+// Debugf is a format string-based logger utility for the bot, since I might want to debug some stuff
+func (b *Bot) Debugf(format string, a ...interface{}) {
+	if b.debug == false {
+		return
+	}
+	log.Printf(format, a...)
 }
 
 // AddMessageHandler adds a new handler to the bot

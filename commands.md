@@ -1,30 +1,7 @@
 # MuxBot Commands
 
-* `.help`
-    - `help` replies to people with a link to this file, providing documentation for the bot's available commands.
-
-* `.ping`
-    - `ping` replies to the user with `pong`, to test the latency between the user and the bot.
-
-* `.echo`
-    - `echo` replies back with the text sent by the user. There aren't many use cases for it but it's a nice-to-have.
-    - Usage: `.echo <text>`
-
-* `.g`
-    - `g` scrapes the first web result on dogpile.com (a search engine based on bing) for the desired query with the link and the description of the result. Even though it's not google, it returns on-topic results.
-    - Usage: `.g <query>`
-
-* `.gis`
-    - `gis` acts like `g`, but instead of scraping the first web result, it scrapes the first image result
-    - Usage: `.gis <query>`
-
-* `.yt`
-    - `yt` queries the Youtube API and replies with a link to the first youtube video result
-    - Usage: `.yt <query>`
-
 * `.issues`
     - `issues` is a set of commands that revolve around gitlab issues in projects the bot is in (from the associated gitlab key entered when running). It is still a work in progress command and everything about it is subject to change. `activeRepo` changing is finished, but it isn't integrated in the `list` and `add` commands for now.
-    - Usage: `.issues <list/add/activeRepo>`
     - `.issues list` lists issues based on the parameters
         - Params:
             - `^author`: sets the required author of the issue.
@@ -57,18 +34,3 @@
         - `.issues active-repo get` displays the active repository for the channel in which the command was requested
         - `.issues active-repo set <repo>` sets the active repository for the requesting channel
         - `.issues active-repo erase` removes the active repository for the requesting channel
-
-* `.gitlab-key`
-    - `gitlab-key` associates a discord user with a personal access token and is used by `.issues` when `list`ing issues assigned to `$self` and `add`ing issues
-    - Usage: `.gitlab-key <personal access token>`
-
-* `.e`
-    - `e` executes some code with a supported language. Visit [the evaluator's github repo]() to see all supported languages as this list is evolving
-    - Usage: `.e <language> ```code``` [```standard input```]`
-
-* `.ghtrends`
-    - `ghtrends` queries a GitHub trends API and returns 10 results in an embed
-    - You can specify the date (`daily`, `weekly`, `monthly`) and the language (`js`, `c++`, etc) in any order, but only the last language will be counted if you include more than one. 
-
-* `.todo`
-    - `todo` doesn't exist anymore, but I am leaving this here as an homage to it: my first big command I implemented. Thank you for your service <3

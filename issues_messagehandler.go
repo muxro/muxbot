@@ -14,8 +14,12 @@ var (
 	issueRegex = regexp.MustCompile(`(([^/\s]+/)?([^\s]+))?#(\d+)`)
 )
 
-func (i *Issues) issueReferenceHandler(bot *Bot, message *discordgo.Message) (bool, error) {
-	matches := issueRegex.FindAllStringSubmatch(message.Content, -1)
+func issueReferenceHandler(bot *Bot, msg *discordgo.Message) (bool, error) {
+	git, err := getUserGit(msg)
+	if err != nil {
+		return false, nil
+	}
+	matches := issueRegex.FindAllStringSubmatch(msg.Content, -1)
 	if len(matches) == 0 {
 		return false, nil
 	}
@@ -24,7 +28,7 @@ func (i *Issues) issueReferenceHandler(bot *Bot, message *discordgo.Message) (bo
 	found := make(map[string]bool)
 
 	for _, match := range matches {
-		repo := i.getRepo(message, match[1])
+		repo := getRepo(git, msg, match[1])
 		if repo == "" {
 			return false, nil
 		}
@@ -41,7 +45,7 @@ func (i *Issues) issueReferenceHandler(bot *Bot, message *discordgo.Message) (bo
 		}
 		found[fqID] = true
 
-		issue, err := i.getIssue(message, issueid, repo)
+		issue, err := getIssue(git, msg, issueid, repo)
 		if err != nil {
 			return false, nil
 		}
@@ -54,16 +58,16 @@ func (i *Issues) issueReferenceHandler(bot *Bot, message *discordgo.Message) (bo
 
 	var resp string
 	for _, issue := range issues {
-		resp += i.displayIssue(issue) + "\n"
+		resp += displayIssue(git, issue) + "\n"
 	}
 
-	bot.SendReply(message, resp)
+	bot.SendReply(msg, resp)
 	return true, nil
 }
 
-func (i *Issues) displayIssue(issue *gitlab.Issue) string {
+func displayIssue(git *gitlab.Client, issue *gitlab.Issue) string {
 	var ret = "```golang\n"
-	project, _ := i.getIssueProject(issue)
+	project, _ := getIssueProject(git, issue)
 	ret += project.Namespace.Path + "/" + project.Path + "#" + strconv.Itoa(issue.IID) + "\n"
 	ret += issue.Title
 	if issue.Assignee != nil {

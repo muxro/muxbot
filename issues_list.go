@@ -42,7 +42,11 @@ type IssuesSearchOptions struct {
 	Any      bool
 }
 
-func (i *Issues) issueListHandler(bot *Bot, args []string, msg *discordgo.Message) error {
+func issueListHandler(bot *Bot, args []string, msg *discordgo.Message) error {
+	git, err := getUserGit(msg)
+	if err != nil {
+		return err
+	}
 	preMessage := ""
 	searchOpts, msgOpts := parseListOpts(args)
 	issueList := []IssuesListOptions{}
@@ -58,7 +62,7 @@ func (i *Issues) issueListHandler(bot *Bot, args []string, msg *discordgo.Messag
 		searchOpts.Assignee = selfUname
 	}
 
-	if searchOpts.Repo != "" && !i.isRepo(searchOpts.Group+"/"+searchOpts.Repo) {
+	if searchOpts.Repo != "" && !isRepo(git, searchOpts.Group+"/"+searchOpts.Repo) {
 		return errInvalidRepo
 	}
 
@@ -72,7 +76,7 @@ func (i *Issues) issueListHandler(bot *Bot, args []string, msg *discordgo.Messag
 		preMessage = fmt.Sprintf("Using active repo %s\n", activeRepo)
 	}
 
-	projects, err := i.getProjects()
+	projects, err := getProjects(git)
 	if err != nil {
 		return err
 	}
@@ -80,7 +84,7 @@ func (i *Issues) issueListHandler(bot *Bot, args []string, msg *discordgo.Messag
 	for _, project := range projects {
 		if searchOpts.Group == "" || project.Namespace.Path == searchOpts.Group {
 			if searchOpts.Repo == "" || project.Name == searchOpts.Repo {
-				issues, _, err := i.git.Issues.ListProjectIssues(project.ID, &gitlab.ListProjectIssuesOptions{Sort: gitlab.String("asc"), Labels: searchOpts.Tags})
+				issues, _, err := git.Issues.ListProjectIssues(project.ID, &gitlab.ListProjectIssuesOptions{Sort: gitlab.String("asc"), Labels: searchOpts.Tags})
 				if err != nil {
 					return err
 				}
@@ -147,7 +151,7 @@ func (i *Issues) issueListHandler(bot *Bot, args []string, msg *discordgo.Messag
 		issueText += "](" + issue.URL + ")"
 		issues = append(issues, issueText)
 	}
-
+	fmt.Println(preMessage + strings.Join(issues, "\n"))
 	_, err = bot.SendReplyEmbed(msg, &discordgo.MessageEmbed{Description: preMessage + strings.Join(issues, "\n")})
 
 	return err

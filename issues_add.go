@@ -18,10 +18,10 @@ type IssuesAddOptions struct {
 	ProjectID   int
 }
 
-func (i *Issues) issueAddHandler(bot *Bot, args []string, msg *discordgo.Message) error {
-	asTok, exists := associatedKey(msg.Author.ID)
-	if exists == false {
-		return errNoPAC
+func issueAddHandler(bot *Bot, args []string, msg *discordgo.Message) error {
+	git, err := getUserGit(msg)
+	if err != nil {
+		return err
 	}
 	if len(args) < 1 {
 		return errInsufficientArgs
@@ -33,7 +33,7 @@ func (i *Issues) issueAddHandler(bot *Bot, args []string, msg *discordgo.Message
 
 	var assigneeID int
 	if opts.Assignee != "" {
-		user, err := i.getUserFromName(opts.Assignee)
+		user, err := getUserFromName(git, opts.Assignee)
 		if err != nil {
 			return errAssigneeNotFound
 		}
@@ -41,18 +41,17 @@ func (i *Issues) issueAddHandler(bot *Bot, args []string, msg *discordgo.Message
 		assigneeID = user.ID
 	}
 
-	opts.Project = i.getRepo(msg, opts.Project)
+	opts.Project = getRepo(git, msg, opts.Project)
 	if opts.Project != "" {
-		if !i.isRepo(opts.Project) {
+		if !isRepo(git, opts.Project) {
 			return errInvalidRepo
 		}
-		opts.ProjectID, err = i.getRepoID(opts.Project, msg)
+		opts.ProjectID, err = getRepoID(git, opts.Project, msg)
 		if err != nil {
 			return err
 		}
 	}
-	userGit := gitlab.NewClient(nil, asTok)
-	issue, _, err := userGit.Issues.CreateIssue(opts.ProjectID,
+	issue, _, err := git.Issues.CreateIssue(opts.ProjectID,
 		&gitlab.CreateIssueOptions{
 			Title:       gitlab.String(opts.Title),
 			Description: gitlab.String(opts.Description),

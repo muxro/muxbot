@@ -1014,6 +1014,20 @@ func (s *Session) GuildRoleCreate(guildID string) (st *Role, err error) {
 	return
 }
 
+// GuildRoleCreateTmpCpy returns a new Guild Role.
+// guildID: The ID of a Guild.
+func (s *Session) GuildRoleCreateTmpCpy(guildID string, data Role) (st *Role, err error) {
+
+	body, err := s.RequestWithBucketID("POST", EndpointGuildRoles(guildID), data, EndpointGuildRoles(guildID))
+	if err != nil {
+		return
+	}
+
+	err = unmarshal(body, &st)
+
+	return
+}
+
 // GuildRoleEdit updates an existing Guild Role with new values
 // guildID   : The ID of a Guild.
 // roleID    : The ID of a Role.

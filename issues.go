@@ -25,8 +25,7 @@ var (
 
 // Issues is the main wrapper for all issue related
 type Issues struct {
-	git   *gitlab.Client
-	token string
+	git *gitlab.Client
 }
 
 // NewIssues initializes a new Issues instance
@@ -36,41 +35,40 @@ func NewIssues(key string) *Issues {
 	}
 }
 
-func (i *Issues) issueHandler(bot *Bot, msg *discordgo.Message, args string) error {
+func issueHandler(bot *Bot, msg *discordgo.Message, args string) error {
 	parts := strings.Fields(args)
 	if len(parts) < 1 {
 		return errInsufficientArgs
 	}
 
 	issueMux := NewCommandMux()
-	issueMux.IssueCommand("list", i.issueListHandler)
-	issueMux.IssueCommand("add", i.issueAddHandler)
-	issueMux.IssueCommand("active-repo", i.issuesActiveRepoHandler)
-	issueMux.IssueCommand("modify", i.issueModifyHandler)
-	issueMux.IssueCommand("close", i.issueCloseHandler)
+	issueMux.IssueCommand("list", issueListHandler)
+	issueMux.IssueCommand("add", issueAddHandler)
+	issueMux.IssueCommand("active-repo", issuesActiveRepoHandler)
+	issueMux.IssueCommand("modify", issueModifyHandler)
+	issueMux.IssueCommand("close", issueCloseHandler)
 
 	msg.Content = strings.Join(parts, " ")
 	return issueMux.Handle(bot, msg)
 }
 
-func (i *Issues) getIssueProject(issue *gitlab.Issue) (*gitlab.Project, error) {
-	git := gitlab.NewClient(nil, *gitlabToken)
+func getIssueProject(git *gitlab.Client, issue *gitlab.Issue) (*gitlab.Project, error) {
 	project, _, err := git.Projects.GetProject(issue.ProjectID, nil)
 	return project, err
 }
 
-func (i *Issues) getGitlabRepo(name string, message *discordgo.Message) (*gitlab.Project, error) {
-	if !i.isRepo(name) {
+func getGitlabRepo(git *gitlab.Client, name string, message *discordgo.Message) (*gitlab.Project, error) {
+	if !isRepo(git, name) {
 		return nil, errInvalidRepo
 	}
 
-	projects, err := i.getProjects()
+	projects, err := getProjects(git)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, project := range projects {
-		if i.isSameRepo(name, project) {
+		if isSameRepo(name, project) {
 			return project, nil
 		}
 	}
@@ -80,10 +78,10 @@ func (i *Issues) getGitlabRepo(name string, message *discordgo.Message) (*gitlab
 		return nil, errNoRepoFound
 	}
 
-	return i.getGitlabRepo(activeRepo, message)
+	return getGitlabRepo(git, activeRepo, message)
 }
 
-func (i *Issues) getRepo(message *discordgo.Message, repo string) string {
+func getRepo(git *gitlab.Client, message *discordgo.Message, repo string) string {
 	parts := strings.SplitN(repo, "/", 2)
 	var namespace string
 	if len(parts) == 2 {
@@ -99,7 +97,7 @@ func (i *Issues) getRepo(message *discordgo.Message, repo string) string {
 		return activeRepo
 	}
 	if namespace == "" {
-		repo, err := i.getGitlabRepo(repo, message)
+		repo, err := getGitlabRepo(git, repo, message)
 		if err != nil {
 			return ""
 		}
@@ -108,11 +106,11 @@ func (i *Issues) getRepo(message *discordgo.Message, repo string) string {
 	return namespace + "/" + repo
 }
 
-func (i *Issues) getFullRepoName(repo *gitlab.Project) (string, string) {
+func getFullRepoName(repo *gitlab.Project) (string, string) {
 	return repo.Namespace.Path, repo.Path
 }
 
-func (i *Issues) splitRepo(repo string) (string, string) {
+func splitRepo(repo string) (string, string) {
 	parts := strings.SplitN(repo, "/", 2)
 	if len(parts) == 2 {
 		return parts[0], parts[1]
@@ -120,48 +118,48 @@ func (i *Issues) splitRepo(repo string) (string, string) {
 	return "", parts[0]
 }
 
-func (i *Issues) getIssue(message *discordgo.Message, iid int, repo string) (*gitlab.Issue, error) {
-	rawRepo, err := i.getGitlabRepo(repo, message)
+func getIssue(git *gitlab.Client, message *discordgo.Message, iid int, repo string) (*gitlab.Issue, error) {
+	rawRepo, err := getGitlabRepo(git, repo, message)
 	if err != nil {
 		return nil, err
 	}
 
-	issue, _, err := i.git.Issues.GetIssue(rawRepo.ID, iid)
+	issue, _, err := git.Issues.GetIssue(rawRepo.ID, iid)
 	if err != nil {
 		return nil, errNoIssueFound
 	}
 	return issue, nil
 }
 
-func (i *Issues) isRepo(name string) bool {
-	projects, err := i.getProjects()
+func isRepo(git *gitlab.Client, name string) bool {
+	projects, err := getProjects(git)
 	if err != nil {
 		return false
 	}
 	name = strings.ToLower(name)
 	for _, project := range projects {
-		if i.isSameRepo(name, project) {
+		if isSameRepo(name, project) {
 			return true
 		}
 	}
 	return false
 }
 
-func (i *Issues) getRepoID(name string, message *discordgo.Message) (int, error) {
-	repo, err := i.getGitlabRepo(name, message)
+func getRepoID(git *gitlab.Client, name string, message *discordgo.Message) (int, error) {
+	repo, err := getGitlabRepo(git, name, message)
 	if err != nil {
 		return -1, err
 	}
 	return repo.ID, nil
 }
 
-func (i *Issues) getProjects() ([]*gitlab.Project, error) {
+func getProjects(git *gitlab.Client) ([]*gitlab.Project, error) {
 	opt := &gitlab.ListProjectsOptions{Membership: gitlab.Bool(true)}
-	projects, _, err := i.git.Projects.ListProjects(opt)
+	projects, _, err := git.Projects.ListProjects(opt)
 	return projects, err
 }
 
-func (i *Issues) isSameRepo(name string, project *gitlab.Project) bool {
+func isSameRepo(name string, project *gitlab.Project) bool {
 	name = strings.ToLower(name)
 	if project.Path == name ||
 		project.Name == name ||
@@ -174,7 +172,7 @@ func (i *Issues) isSameRepo(name string, project *gitlab.Project) bool {
 	return false
 }
 
-func (i *Issues) gitlabKeyHandler(bot *Bot, msg *discordgo.Message, key string) error {
+func gitlabKeyHandler(bot *Bot, msg *discordgo.Message, key string) error {
 	err := bot.ds.ChannelMessageDelete(msg.ChannelID, msg.ID)
 	preMessage := ""
 	if err != nil {
@@ -195,8 +193,9 @@ func (i *Issues) gitlabKeyHandler(bot *Bot, msg *discordgo.Message, key string) 
 	return err
 }
 
-func (i *Issues) getUserFromName(username string) (*gitlab.User, error) {
-	users, _, err := i.git.Users.ListUsers(&gitlab.ListUsersOptions{Username: gitlab.String(username)})
+func getUserFromName(git *gitlab.Client, username string) (*gitlab.User, error) {
+
+	users, _, err := git.Users.ListUsers(&gitlab.ListUsersOptions{Username: gitlab.String(username)})
 	if err != nil {
 		return nil, err
 	}
@@ -232,4 +231,13 @@ func parseIssueParam(issue string) (int, string, error) {
 		}
 	}
 	return id, repo, nil
+}
+
+func getUserGit(msg *discordgo.Message) (*gitlab.Client, error) {
+	asTok, exists := associatedKey(msg.Author.ID)
+	if exists == false {
+		return nil, errNoPAC
+	}
+	git := gitlab.NewClient(nil, asTok)
+	return git, nil
 }
