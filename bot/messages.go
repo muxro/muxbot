@@ -1,47 +1,37 @@
 package bot
 
 import (
-	"fmt"
-	"strings"
+	"context"
 
 	"github.com/bwmarrin/discordgo"
 )
 
-// SendReplyComplex is the base for SendReply and SendReplyEmbed
-func (b *Bot) SendReplyComplex(msg *discordgo.Message, data *discordgo.MessageSend) (*discordgo.Message, error) {
-	var existing *discordgo.Message
-	for _, pair := range b.replyHist.msgs {
-		if pair != nil && pair[0].ID == msg.ID {
-			existing = pair[1]
-			break
-		}
-	}
-
-	if data.Content != "" {
-		author := strings.Split(msg.Author.String(), "#")[0]
-		data.Content = fmt.Sprintf("(%s) %s", author, data.Content)
-		data.Embed = nil
-	}
-	var replyMsg *discordgo.Message
-	var err error
-	if existing != nil {
-		replyMsg, err = b.Disco.ChannelMessageEditComplex(&discordgo.MessageEdit{
-			ID: existing.ID, Channel: existing.ChannelID,
-			Content: &data.Content,
-			Embed:   data.Embed,
-		})
-	} else {
-		replyMsg, err = b.Disco.ChannelMessageSendComplex(msg.ChannelID, data)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	b.replyHist.Add(msg, replyMsg)
-	return replyMsg, err
+type Content interface {
+	ToMessage(ctx context.Context, replyTo *discordgo.Message) Message
 }
 
-// SendReply sends a msg with the username in parentheses at the start
-func (b *Bot) SendReply(msg *discordgo.Message, reply string) (*discordgo.Message, error) {
-	return b.SendReplyComplex(msg, &discordgo.MessageSend{Content: reply})
+type Message interface {
+	Content() string
+	Embed() *discordgo.MessageEmbed
 }
+
+type OnSender interface {
+	OnSend(ctx context.Context, b *Bot, msg *discordgo.Message) error
+}
+
+type OnEditer interface {
+	OnEdit(ctx context.Context, b *Bot, msg *discordgo.Message) error
+}
+
+type OnReactAdder interface {
+	OnReactAdd(context.Context, *Bot, *discordgo.MessageReaction) error
+}
+
+type OnReactRemover interface {
+	OnReactRemove(context.Context, *Bot, *discordgo.MessageReaction) error
+}
+
+type textMessage string
+
+func (tm textMessage) Content() string                { return string(tm) }
+func (tm textMessage) Embed() *discordgo.MessageEmbed { return nil }

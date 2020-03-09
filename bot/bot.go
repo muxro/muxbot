@@ -2,39 +2,25 @@ package bot
 
 import (
 	"context"
+	"errors"
+	"sync"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/urfave/cli/v2"
 )
 
 type Bot struct {
 	Disco *discordgo.Session
 
-	commands  []*cli.Command
-	handlers  []MessageHandler
-	replyHist *replyHistory
+	cmds     commands
+	handlers handlers
+
+	// bot message history
+	history *msgHistory
 
 	config *Config
-	ctx    context.Context
-}
 
-// replyHistory is stores the last max messages to update if the original message is edited
-type replyHistory struct {
-	no   int
-	msgs [][]*discordgo.Message
-}
-
-// newMessageHistory creates a replyHistory instance with `max` possible slots
-func newMessageHistory(max int) *replyHistory {
-	return &replyHistory{
-		msgs: make([][]*discordgo.Message, max, max),
-	}
-}
-
-// Add an element to the history "cache" with rollover
-func (rh *replyHistory) Add(msg, reply *discordgo.Message) {
-	rh.msgs[rh.no] = []*discordgo.Message{msg, reply}
-	rh.no = (rh.no + 1) % len(rh.msgs)
+	mu  sync.Mutex
+	ctx context.Context
 }
 
 type Config struct {
@@ -44,36 +30,68 @@ type Config struct {
 	Addons []interface{}
 }
 
-func New(ctx context.Context, config Config) (*Bot, error) {
+func New(config Config) (*Bot, error) {
 	disco, err := discordgo.New("Bot " + config.Token)
 	if err != nil {
 		return nil, err
 	}
+	disco.MaxRestRetries = 3
+	disco.ShouldReconnectOnError = true
 
-	bot := &Bot{
+	b := &Bot{
 		Disco: disco,
 
-		replyHist: newMessageHistory(1000),
+		// 50 bot messages remembered per channel
+		history: newMessageHistory(50),
 
 		config: &config,
-		ctx:    ctx,
 	}
 
-	bot.registerHandlers()
+	b.AddHandler(50, b.commandHandler)
 
-	return bot, nil
+	b.registerDiscordHandlers()
+
+	return b, nil
 }
 
-func (b *Bot) Start() error {
-	return b.Disco.Open()
+func (b *Bot) Start(ctx context.Context) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if b.ctx != nil {
+		b.mu.Unlock()
+		return errors.New("already started")
+	}
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	err := b.Disco.Open()
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		<-ctx.Done()
+
+		b.mu.Lock()
+		b.ctx = nil
+		b.Disco.Close()
+		b.mu.Unlock()
+	}()
+
+	ctx = context.WithValue(ctx, ctxBotKey, b)
+	b.ctx = ctx
+	return nil
 }
 
 func (b *Bot) Config() Config {
 	return *b.config
 }
 
-func (b *Bot) registerHandlers() {
-	//b.Disco.AddHandler(b.onReady)
-	b.Disco.AddHandler(b.onMessageCreate)
-	b.Disco.AddHandler(b.onMessageEdit)
+func (b *Bot) IsMe(id string) bool {
+	return id == b.Disco.State.User.ID
 }
