@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"strings"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/urfave/cli/v2"
@@ -17,12 +18,16 @@ type CommandContext struct {
 	*cli.Context
 }
 
-func (c *CommandContext) RawArg() string {
+func (c *CommandContext) Ctx() context.Context {
+	return c.Context.Context
+}
+
+func (c *CommandContext) RawArg(no int) string {
 	cmd := c.App.Metadata["cmd-str"].(string)
 	pos := c.App.Metadata["cmd-pos"].([]int)
 
 	cmdArgs := c.Args().Slice()
-	rawArgPos := pos[len(pos)-len(cmdArgs)]
+	rawArgPos := pos[len(pos)-len(cmdArgs)+no]
 
 	return cmd[rawArgPos:]
 }
@@ -33,8 +38,11 @@ func CommandHandler(handler func(c *CommandContext) Content) cli.ActionFunc {
 			Context: c,
 		}
 
-		content := handler(ctx)
-		return Reply(c.Context, content)
+		content := Delayed(c.Context, &DelayedConfig{Wait: 3 * time.Second}, func() Content {
+			return handler(ctx)
+		})
+
+		return Send(c.Context, content)
 	}
 }
 
@@ -70,12 +78,12 @@ func (b *Bot) commandHandler(ctx context.Context, msg *discordgo.Message) (bool,
 
 	err := app.RunContext(ctx, params)
 	if err != nil {
-		return true, Reply(ctx, Text{Content: err.Error()})
+		return true, Send(ctx, Text{Content: err.Error()})
 	}
 
 	out := strings.TrimSpace(outBuf.String())
 	if len(out) > 0 {
-		return true, Reply(ctx, Text{
+		return true, Send(ctx, Text{
 			Content: out,
 			Quoted:  true,
 		})

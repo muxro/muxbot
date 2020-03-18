@@ -4,9 +4,12 @@ import (
 	"context"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"errors"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 type DelayedConfig struct {
@@ -19,85 +22,189 @@ type DelayedConfig struct {
 
 var defWaitAnim = []string{"🕛", "🕐", "🕑", "🕒", "🕓", "🕔", "🕕", "🕖", "🕗", "🕘", "🕙", "🕚"}
 
-func Delayed(ctx context.Context, conf *DelayedConfig, fn func() Content) Content {
-	var config DelayedConfig
-	if conf != nil {
-		config = *conf
+func Delayed(ctx context.Context, config *DelayedConfig, fn func() Content) Content {
+	var conf DelayedConfig
+	if config != nil {
+		conf = *config
 	}
 
-	config.Name = strings.TrimSpace(config.Name)
-	if len(config.Name) == 0 {
-		config.Name = "working"
+	conf.Name = strings.TrimSpace(conf.Name)
+	if len(conf.Name) == 0 {
+		conf.Name = "working"
 	}
 
-	if len(config.Animation) == 0 {
-		config.Animation = defWaitAnim
+	if len(conf.Animation) == 0 {
+		conf.Animation = defWaitAnim
 	}
 
-	if config.Wait <= 0 {
-		config.UpdateRate = 1500 * time.Millisecond
+	if conf.Wait <= 0 {
+		conf.Wait = 500 * time.Millisecond
 	}
 
-	if config.UpdateRate <= 0 {
-		config.UpdateRate = 1500 * time.Millisecond
+	if conf.UpdateRate <= 0 {
+		conf.UpdateRate = 1500 * time.Millisecond
 	}
 
-	done := make(chan bool)
+	cchan := make(chan Content)
+	go func() { cchan <- fn() }()
 
-	go delayedProgress(ctx, &config, done)
-
-	content := fn()
-	log.Println("got content")
-	close(done)
-
-	return content
-}
-
-func delayedProgress(ctx context.Context, conf *DelayedConfig, done chan bool) {
 	if conf.Wait > 0 {
 		select {
 		case <-time.After(conf.Wait):
-		case <-done:
-			return
+			log.Println("waited grace period")
+
+		case content := <-cchan:
+			log.Println("returned before grace period")
+			return content
 		}
-		log.Println("waited grace period")
 	}
 
-	if conf.NoAnimate {
-		log.Println("not animated")
-		Reply(ctx, Text{Content: conf.Name + "..."})
+	dm := &delayedMessage{
+		conf:  &conf,
+		cchan: cchan,
+	}
+	dm.genMessage(0)
+
+	var once sync.Once
+	return MessageFunc(func(ctx context.Context, replyTo *discordgo.Message) Message {
+		once.Do(func() {
+			dm.ctx = ctx
+
+			go dm.update()
+		})
+		return dm
+	})
+}
+
+//func DelayedMessage(ctx context.Context, config *DelayedConfig, fn func() Message) Message {
+//	var conf DelayedConfig
+//	if config != nil {
+//		conf = *config
+//	}
+//
+//	conf.Name = strings.TrimSpace(conf.Name)
+//	if len(conf.Name) == 0 {
+//		conf.Name = "working"
+//	}
+//
+//	if len(conf.Animation) == 0 {
+//		conf.Animation = defWaitAnim
+//	}
+//
+//	if conf.Wait <= 0 {
+//		conf.UpdateRate = 1500 * time.Millisecond
+//	}
+//
+//	if conf.UpdateRate <= 0 {
+//		conf.UpdateRate = 1500 * time.Millisecond
+//	}
+//
+//	cchan := make(chan Message)
+//	go func() { cchan <- fn() }()
+//
+//	if conf.Wait > 0 {
+//		select {
+//		case <-time.After(conf.Wait):
+//			log.Println("waited grace period")
+//
+//		case content := <-cchan:
+//			log.Println("returned before grace period")
+//			return content
+//		}
+//	}
+//
+//	dm := &delayedMessage{
+//		conf:  &conf,
+//		cchan: cchan,
+//	}
+//	dm.genMessage(0)
+//
+//	var once sync.Once
+//	return MessageFunc(func(ctx context.Context, replyTo *discordgo.Message) Message {
+//		once.Do(func() {
+//			dm.ctx = ctx
+//
+//			go dm.update()
+//		})
+//		return dm
+//	})
+//}
+
+type delayedMessage struct {
+	ctx     context.Context
+	replyTo *discordgo.Message
+	conf    *DelayedConfig
+	cchan   chan Content
+
+	Message
+}
+
+var _ OnEditer = &delayedMessage{}
+
+func (dm *delayedMessage) OnEdit(ctx context.Context, dmsg *discordgo.Message, cur Message) error {
+	if cur == dm {
+		return nil
+	}
+
+	close(dm.cchan)
+	return nil
+}
+
+func (dm *delayedMessage) genMessage(seq int) {
+	conf := dm.conf
+	if dm.conf.NoAnimate {
+		dm.setContent(Text{Content: conf.Name + "..."})
 		return
 	}
 
-	tick := time.NewTicker(conf.UpdateRate)
+	anim := conf.Animation[seq%len(conf.Animation)]
+	points := "..."[:(seq+1)%4]
+	content := conf.Name + " " + anim + " " + points
+	dm.setContent(Text{Content: content})
+}
+
+func (dm *delayedMessage) setContent(content Content) {
+	dm.Message = content.ToMessage(dm.ctx, dm.replyTo)
+}
+
+func (dm *delayedMessage) update() {
+	if dm.conf.NoAnimate {
+		return
+	}
+
+	tick := time.NewTicker(dm.conf.UpdateRate)
 	defer tick.Stop()
 
-	for i := 0; ; i++ {
-		log.Println("tick")
-		anim := conf.Animation[i%len(conf.Animation)]
-		points := "..."[:(i+1)%4]
-		content := conf.Name + " " + anim + " " + points
-		Reply(ctx, Text{Content: content})
+	ctx := dm.ctx
 
+	for i := 1; ; i++ {
 		select {
 		case <-ctx.Done():
 			log.Println("canceled")
 			err := ctx.Err()
 			ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 			if errors.Is(err, context.DeadlineExceeded) {
-				Reply(ctx, Text{Content: "timed out"})
+				Send(ctx, Text{Content: "timed out"})
 			} else if errors.Is(err, context.Canceled) {
-				Reply(ctx, Text{Content: "canceled"})
+				Send(ctx, Text{Content: "canceled"})
 			}
 			cancel()
 			return
 
-		case <-done:
-			log.Println("exited")
+		case content, ok := <-dm.cchan:
+			if !ok {
+				log.Println("canceled")
+				return
+			}
+
+			log.Println("got content")
+			Send(ctx, content)
 			return
 
 		case <-tick.C:
-			// just continue with the loop
+			log.Println("tick")
+			dm.genMessage(i)
+			SendMessage(ctx, dm)
 		}
 
 	}

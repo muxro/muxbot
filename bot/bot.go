@@ -15,7 +15,7 @@ type Bot struct {
 	handlers handlers
 
 	// bot message history
-	history *msgHistory
+	history *history
 
 	config *Config
 
@@ -94,4 +94,18 @@ func (b *Bot) Config() Config {
 
 func (b *Bot) IsMe(id string) bool {
 	return id == b.Disco.State.User.ID
+}
+
+type contextKey struct {
+	name string
+}
+
+var (
+	ctxBotKey     = &contextKey{"bot"}
+	ctxHistoryKey = &contextKey{"history message"}
+)
+
+func FromContext(ctx context.Context) *Bot {
+	bot, _ := ctx.Value(ctxBotKey).(*Bot)
+	return bot
 }

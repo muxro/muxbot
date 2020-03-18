@@ -25,7 +25,12 @@ func (_ TestCommands) Add(b *bot.Bot) error {
 			&cli.DurationFlag{
 				Name:    "delay",
 				Aliases: []string{"d"},
-				Usage:   "delay until the echo",
+				Usage:   "delay until the showing the message",
+			},
+			&cli.DurationFlag{
+				Name:    "sleep",
+				Aliases: []string{"s"},
+				Usage:   "how long to sleep until returning",
 			},
 			&cli.StringFlag{
 				Name:    "header",
@@ -74,7 +79,12 @@ func (_ TestCommands) Add(b *bot.Bot) error {
 			&cli.DurationFlag{
 				Name:    "delay",
 				Aliases: []string{"d"},
-				Usage:   "delay until the echo",
+				Usage:   "delay until the showing the message",
+			},
+			&cli.DurationFlag{
+				Name:    "sleep",
+				Aliases: []string{"s"},
+				Usage:   "how long to sleep until returning",
 			},
 			&cli.StringFlag{
 				Name:    "header",
@@ -163,9 +173,14 @@ func testSize(c *bot.CommandContext) bot.Content {
 		Pastebin:   c.Bool("paste"),
 	}
 
+	sleep := c.Duration("sleep")
+	if sleep > 0 {
+		time.Sleep(sleep)
+	}
+
 	delay := c.Duration("delay")
 	if delay > 0 {
-		return bot.Delayed(c.Context.Context, nil, func() bot.Content {
+		return bot.Delayed(c.Context.Context, &bot.DelayedConfig{Name: "delayed waiting"}, func() bot.Content {
 			time.Sleep(delay)
 			return content
 		})
@@ -177,7 +192,7 @@ func testSize(c *bot.CommandContext) bot.Content {
 func testEcho(c *bot.CommandContext) bot.Content {
 	content := bot.Text{
 		Header:     c.String("header"),
-		Content:    c.RawArg(),
+		Content:    c.RawArg(0),
 		Footer:     c.String("footer"),
 		Raw:        c.Bool("raw"),
 		Quoted:     c.Bool("quoted"),
@@ -186,9 +201,14 @@ func testEcho(c *bot.CommandContext) bot.Content {
 		Pastebin:   c.Bool("paste"),
 	}
 
+	sleep := c.Duration("sleep")
+	if sleep > 0 {
+		time.Sleep(sleep)
+	}
+
 	delay := c.Duration("delay")
 	if delay > 0 {
-		return bot.Delayed(c.Context.Context, nil, func() bot.Content {
+		return bot.Delayed(c.Context.Context, &bot.DelayedConfig{Name: "delayed waiting"}, func() bot.Content {
 			time.Sleep(delay)
 			return content
 		})

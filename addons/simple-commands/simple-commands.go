@@ -7,7 +7,7 @@ import (
 )
 
 func init() {
-	addons.Register("simple-commands", SimpleCommands{})
+	addons.Register("test", SimpleCommands{})
 }
 
 type SimpleCommands struct{}
@@ -15,21 +15,33 @@ type SimpleCommands struct{}
 func (_ SimpleCommands) Add(b *bot.Bot) error {
 	b.RegisterCommand(&cli.Command{
 		Name:   "ping",
+		Usage:  `replies with "pong"`,
 		Action: bot.CommandHandler(ping),
 	})
 
 	b.RegisterCommand(&cli.Command{
 		Name:   "echo",
+		Usage:  "echoes back the given text",
 		Action: bot.CommandHandler(echo),
+	})
+
+	b.RegisterCommand(&cli.Command{
+		Name:   "escape",
+		Usage:  "escape the given text",
+		Action: bot.CommandHandler(escape),
 	})
 
 	return nil
 }
 
-func ping() string {
+func ping() bot.Message {
 	return "pong"
 }
 
-func echo(args string) string {
-	return args
+func echo(arg string) bot.Message {
+	return bot.RawString{arg}
+}
+
+func escape(arg string) bot.Message {
+	return arg
 }

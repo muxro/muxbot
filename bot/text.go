@@ -2,16 +2,20 @@ package bot
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/bwmarrin/discordgo"
 )
 
 type Text struct {
-	Header     string
-	Content    string
-	Footer     string
+	Header  string
+	Content string
+	Footer  string
+
 	Raw        bool
 	Quoted     bool
 	QuoteType  string
@@ -19,82 +23,113 @@ type Text struct {
 	Pastebin   bool
 }
 
+type textMessage string
+
+func (tm textMessage) Content() string                { return string(tm) }
+func (tm textMessage) Embed() *discordgo.MessageEmbed { return nil }
+
 var _ Content = Text{}
 
-func (s Text) ToMessage(ctx context.Context, replyTo *discordgo.Message) Message {
-	s.Content = strings.TrimSpace(s.Content)
-	s.Header = strings.TrimSpace(s.Header)
-	s.Footer = strings.TrimSpace(s.Footer)
-	s.QuoteType = Escape(strings.TrimSpace(s.QuoteType))
+func (t Text) ToMessage(ctx context.Context, replyTo *discordgo.Message) Message {
+	t.Content = strings.TrimSpace(t.Content)
+	t.Header = strings.TrimSpace(t.Header)
+	t.Footer = strings.TrimSpace(t.Footer)
+	t.QuoteType = Escape(strings.TrimSpace(t.QuoteType), true)
 
 	if replyTo != nil {
-		s.Header = addContext("("+Escape(replyTo.Author.Username)+")", s.Header)
+		t.Header = addContext("("+Escape(replyTo.Author.Username, false)+")", t.Header)
 	}
 
-	//orig := s.Content
-	if !s.Raw {
-		s.Content = Escape(s.Content)
+	orig := t.Content
+	if !t.Raw {
+		t.Content = Escape(t.Content, t.Quoted)
 	}
 
 	// string is small enough to just sent as-is
-	if s.calcSize() <= 2000 {
-		return textMessage(s.compose())
+	if t.calcSize() <= 2000 {
+		return textMessage(t.compose())
 	}
 
-	if !s.Pagination {
-		s.Header = addContext(s.Header, "message was trimmed")
+	if !t.Pagination {
+		t.Header = addContext(t.Header, "message was trimmed")
 	}
 
-	// if the string is too big, pastebin it if we're asked to
-	//var pasteURL string
-	//if s.Pastebin {
-	//	return Delayed(&DelayedConfig{Name: "uploading", ReplyTo: replyTo.Author.Username}, func() Content {
-	//		pasteURL, _ = pastebin(orig)
-	//		if len(pasteURL) > 0 {
-	//			s.Header = addContext(s.Header, "full version @ <"+pasteURL+">")
-	//		} else {
-	//			s.Header = addContext(s.Header, "failed to upload paste")
-	//		}
+	//// if the string is too big, pastebin it if we're asked to
+	var pasteURL string
+	if t.Pastebin {
+		fmt.Println("pastebin")
+		//return DelayedMessage(ctx, &DelayedConfig{Name: "uploading"}, func(replyTo *discordgo.Message) Message {
+		pasteURL, _ = pastebin(ctx, orig)
+		if len(pasteURL) > 0 {
+			t.Header = addContext(t.Header, "full version @ <"+pasteURL+">")
+		} else {
+			t.Header = addContext(t.Header, "failed to upload paste")
+		}
 
-	//		return s.trimmedOrPaginated(replyTo)
-	//	})
-	//}
+		//return t.trimmedOrPaginated(replyTo)
+		//})
+	}
 
-	return s.trimmedOrPaginated(replyTo)
-}
-
-func (s *Text) trimmedOrPaginated(replyTo *discordgo.Message) Message {
 	// paginate response
-	//if s.Pagination {
-	//	return paginateText(replyTo, s)
-	//}
+	if t.Pagination {
+		return t.paginated(ctx, replyTo)
+	}
 
 	// something bad could happen when trimming a raw string
-	if s.Raw {
+	if t.Raw {
 		log.Println("WARNING: trimmed raw string")
 	}
 
-	// set trim size
-	maxSize := len(s.Content) - (s.calcSize() - 2000)
+	maxSize := 2000 - (t.calcSize() - len(t.Content))
+	parts := splitText(maxSize, t.Content)
+	t.Content = parts[0]
 
-	// trim possible escapes
-	s.Content = strings.TrimRight(s.Content[:maxSize], "\\")
-
-	return textMessage(s.compose())
-
+	return textMessage(t.compose())
 }
 
-func (s *Text) calcSize() int {
-	size := len(s.Header) + len(s.Content) + len(s.Footer)
+func (t Text) paginated(ctx context.Context, replyTo *discordgo.Message) Message {
+	origFoot := t.Footer
+	t.Footer = addContext("Page 00/00", origFoot)
+
+	maxSize := 2000 - (t.calcSize() - len(t.Content))
+	parts := splitText(maxSize, t.Content)
+
+	pages := make([]Content, 0, len(parts))
+	for i, part := range parts {
+		text := Text{
+			Header:    t.Header,
+			Content:   part,
+			Footer:    addContext(fmt.Sprintf("Page %d/%d", i+1, len(parts)), origFoot),
+			Quoted:    t.Quoted,
+			QuoteType: t.QuoteType,
+		}
+		content := text.compose()
+
+		page := MessageFunc(func(ctx context.Context, replyTo *discordgo.Message) Message {
+			return textMessage(content)
+		})
+
+		pages = append(pages, page)
+	}
+
+	p := Paginator{
+		Pager: ContentSlice(pages),
+	}
+
+	return p.ToMessage(ctx, replyTo)
+}
+
+func (t *Text) calcSize() int {
+	size := len(t.Header) + len(t.Content) + len(t.Footer)
 	if size == 0 {
 		return 0
 	}
 
 	// quoted strings don't require separators
-	if s.Quoted {
+	if t.Quoted {
 		// quote type + separator
-		if len(s.QuoteType) > 0 {
-			size += len(s.QuoteType) + 1
+		if len(t.QuoteType) > 0 {
+			size += len(t.QuoteType) + 1
 		}
 
 		// 6 backticks
@@ -102,26 +137,26 @@ func (s *Text) calcSize() int {
 	}
 
 	// do we need a header separator?
-	if len(s.Header) > 0 {
+	if len(t.Header) > 0 {
 		size += 1
 	}
 
 	// do we need a footer separator
-	if len(s.Footer) > 0 {
+	if len(t.Footer) > 0 {
 		size += 1
 	}
 
 	return size
 }
 
-func (s *Text) compose() string {
-	header := s.Header
-	content := s.Content
-	footer := s.Footer
+func (t *Text) compose() string {
+	header := t.Header
+	content := t.Content
+	footer := t.Footer
 
-	if s.Quoted {
-		if len(s.QuoteType) > 0 {
-			content = s.QuoteType + "\n" + content
+	if t.Quoted {
+		if len(t.QuoteType) > 0 {
+			content = t.QuoteType + "\n" + content
 		}
 		content = "```" + content + "```"
 
@@ -156,4 +191,91 @@ func addContext(ctx string, msg string) string {
 	}
 
 	return ctx + " | " + msg
+}
+
+func splitText(max int, text string) []string {
+	var parts []string
+	for len(text) > 0 {
+		split := findSplit(max, text)
+		part := strings.TrimSpace(text[:split])
+		text = strings.TrimSpace(text[split:])
+
+		if len(part) == 0 {
+			continue
+		}
+
+		parts = append(parts, part)
+	}
+
+	return parts
+}
+
+func findSplit(max int, text string) int {
+	if len(text) <= max {
+		return len(text)
+	}
+
+	maxBreak := (max * 90) / 100
+
+	bestPrio, pos := 0, max
+	for i := max; i >= maxBreak; i-- {
+		// skip extra utf8 bytes
+		if text[i]&0xC0 == 0x80 {
+			continue
+		}
+
+		if isEscaped(text, i) {
+			continue
+		}
+
+		r, size := utf8.DecodeRune([]byte(text[i:]))
+		if i+size > max {
+			continue
+		}
+
+		prio := splitPrio(r)
+		if prio > bestPrio {
+			bestPrio, pos = prio, i+size
+		}
+
+		if prio == 100 {
+			break
+		}
+	}
+
+	return pos
+}
+
+func splitPrio(r rune) int {
+	if r == '\n' || r == '\r' {
+		return 100
+	}
+
+	if r == '\t' {
+		return 3
+	}
+
+	if unicode.IsSpace(r) {
+		return 2
+	}
+
+	return 1
+}
+
+func isEscaped(text string, pos int) bool {
+	r := text[pos]
+	if r == '\n' || r == '\r' {
+		return false
+	}
+
+	var count int
+	for i := pos - 1; i >= 0; i-- {
+		if text[i] != '\\' {
+			break
+		}
+
+		count++
+	}
+
+	return count%2 == 1
 }

@@ -2,31 +2,48 @@ package bot
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/bwmarrin/discordgo"
 )
 
 type Pager interface {
-	Page(page int) Content
+	Page(page uint) Content
+	TotalPages() uint
 }
 
 type Paginator struct {
-	pager      Pager
-	page       int
-	totalPages int
+	Pager    Pager
+	Page     uint
+	OnlyUser string
+}
 
-	onlyUser string
+var _ Content = Paginator{}
 
+func (pg Paginator) ToMessage(ctx context.Context, replyTo *discordgo.Message) Message {
+	p := &paginated{
+		Paginator:  &pg,
+		totalPages: pg.Pager.TotalPages(),
+		replyTo:    replyTo,
+	}
+
+	p.setPage(ctx, 0)
+	return p
+}
+
+type paginated struct {
+	*Paginator
+	totalPages uint
+	replyTo    *discordgo.Message
 	Message
 }
 
-var _ OnSender = &Paginator{}
-var _ OnReactAdder = &Paginator{}
+var _ OnSender = &paginated{}
+var _ OnReactAdder = &paginated{}
 
-func (p *Paginator) OnSend(ctx context.Context, b *Bot, msg *discordgo.Message) error {
+func (p *paginated) OnSend(ctx context.Context, msg *discordgo.Message) error {
 	emojis := []string{"◀️", "▶️"}
 
+	b := FromContext(ctx)
 	for _, emoji := range emojis {
 		b.Disco.MessageReactionAdd(msg.ChannelID, msg.ID, emoji)
 	}
@@ -34,8 +51,8 @@ func (p *Paginator) OnSend(ctx context.Context, b *Bot, msg *discordgo.Message) 
 	return nil
 }
 
-func (p *Paginator) OnReactAdd(ctx context.Context, b *Bot, react *discordgo.MessageReaction) error {
-	page := p.page
+func (p *paginated) OnReactAdd(ctx context.Context, react *discordgo.MessageReaction) error {
+	page := p.Page
 	switch react.Emoji.APIName() {
 	case "◀️":
 		page -= 1
@@ -45,9 +62,10 @@ func (p *Paginator) OnReactAdd(ctx context.Context, b *Bot, react *discordgo.Mes
 		return nil
 	}
 
+	b := FromContext(ctx)
 	b.Disco.MessageReactionRemove(react.ChannelID, react.MessageID, react.Emoji.APIName(), react.UserID)
 
-	if len(p.onlyUser) > 0 && react.UserID != p.onlyUser {
+	if len(p.OnlyUser) > 0 && react.UserID != p.OnlyUser {
 		return nil
 	}
 
@@ -55,52 +73,24 @@ func (p *Paginator) OnReactAdd(ctx context.Context, b *Bot, react *discordgo.Mes
 		return nil
 	}
 
-	content := p.pager.Page(page)
-	// TODO: need replyTo here
-	msg := content.ToMessage(ctx, nil)
-	p.Message = msg
-	p.page = page
-
-	//b.EditMessage(ctx, react.ChannelID, react.MessageID, p)
-	return nil
+	p.setPage(ctx, page)
+	return SendMessage(ctx, p)
 }
 
-type stringPager []*Text
-
-func (sp stringPager) Page(page int) Content {
-	return sp[page]
+func (p *paginated) setPage(ctx context.Context, page uint) {
+	content := p.Pager.Page(page)
+	p.Message = content.ToMessage(ctx, p.replyTo)
+	p.Page = page
 }
 
-func paginateText(replyTo string, s *Text) *Paginator {
-	parts := make([]string, 0, len(s.Content)/1000)
-	for i := 0; i < len(s.Content); i += 1000 {
-		upper := i + 1000
-		if upper > len(s.Content) {
-			upper = len(s.Content)
-		}
+type ContentSlice []Content
 
-		parts = append(parts, s.Content[i:upper])
-	}
+var _ Pager = ContentSlice{}
 
-	sparts := make(stringPager, 0, len(parts))
-	for i := range parts {
-		sparts = append(sparts, &Text{
-			Header:    s.Header,
-			Content:   parts[i],
-			Footer:    fmt.Sprintf("Page %d/%d", i+1, len(parts)),
-			Quoted:    s.Quoted,
-			QuoteType: s.QuoteType,
-		})
-	}
+func (cs ContentSlice) Page(page uint) Content {
+	return cs[int(page)]
+}
 
-	p := &Paginator{
-		pager:      sparts,
-		page:       0,
-		totalPages: len(parts),
-	}
-	// TODO: need replyTo here
-	ctx := context.TODO()
-	p.Message = sparts[0].ToMessage(ctx, nil)
-
-	return p
+func (cs ContentSlice) TotalPages() uint {
+	return uint(len(cs))
 }

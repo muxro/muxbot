@@ -40,19 +40,23 @@ func (b *Bot) onMessage(msg *discordgo.Message) {
 		return
 	}
 
-	defer func() {
-		if r := recover(); r != nil {
-			log.Printf("panicked: %v\n%s", r, string(debug.Stack()))
-		}
-	}()
-
 	ctx, cancel := context.WithTimeout(b.ctx, 20*time.Second)
 
-	hmsg := b.history.Add(msg)
+	hmsg := &message{
+		ReplyTo: msg,
+		cancel:  cancel,
+	}
+
+	b.history.Add(hmsg)
 	ctx = context.WithValue(ctx, ctxHistoryKey, hmsg)
 
 	go func() {
-		defer cancel()
+
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("panicked: %v\n%s", r, string(debug.Stack()))
+			}
+		}()
 
 		for _, ph := range b.handlers {
 			handled, err := ph.handler(ctx, msg)
@@ -65,7 +69,6 @@ func (b *Bot) onMessage(msg *discordgo.Message) {
 				break
 			}
 		}
-		cancel()
 	}()
 }
 
@@ -90,10 +93,11 @@ func (b *Bot) onMessageReactionAdd(s *discordgo.Session, react *discordgo.Messag
 	ctx, cancel := context.WithTimeout(b.ctx, 10*time.Second)
 	defer cancel()
 
+	ctx = context.WithValue(ctx, ctxBotKey, b)
 	ctx = context.WithValue(ctx, ctxHistoryKey, hmsg)
 
 	if on, ok := hmsg.Message.(OnReactAdder); ok {
-		err := on.OnReactAdd(ctx, b, react.MessageReaction)
+		err := on.OnReactAdd(ctx, react.MessageReaction)
 		if err != nil {
 			log.Printf("OnReactAdd: %v", err)
 		}
@@ -113,10 +117,11 @@ func (b *Bot) onMessageReactionRemove(s *discordgo.Session, react *discordgo.Mes
 	ctx, cancel := context.WithTimeout(b.ctx, 10*time.Second)
 	defer cancel()
 
+	ctx = context.WithValue(ctx, ctxBotKey, b)
 	ctx = context.WithValue(ctx, ctxHistoryKey, hmsg)
 
 	if on, ok := hmsg.Message.(OnReactRemover); ok {
-		err := on.OnReactRemove(ctx, b, react.MessageReaction)
+		err := on.OnReactRemove(ctx, react.MessageReaction)
 		if err != nil {
 			log.Printf("OnReactRemove: %v", err)
 		}

@@ -6,9 +6,9 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// msgHistory stores the last [no] messages per channel that the bot sent
-type msgHistory struct {
-	max int
+// guildHistory stores the last [no] messages per channel that the bot sent
+type history struct {
+	maxPerChannel int
 
 	mu    sync.Mutex
 	chans map[string]*chanHistory
@@ -19,61 +19,105 @@ type chanHistory struct {
 	msgs []*message
 }
 
-// newMessageHistory creates a msgHistory instance with `max` possible slots
-func newMessageHistory(max int) *msgHistory {
-	return &msgHistory{
-		max:   max,
-		chans: map[string]*chanHistory{},
-	}
-}
-
 type message struct {
-	ReplyTo *discordgo.Message
+	sync.Mutex
 
-	mu      sync.Mutex
-	Sent    *discordgo.Message
 	Message Message
+	ReplyTo *discordgo.Message
+	Sent    *discordgo.Message
+
 	removed bool
+	cancel  func()
 }
 
-func (mh *msgHistory) Add(replyTo *discordgo.Message) *message {
-	m := &message{
-		ReplyTo: replyTo,
+// newMessageHistory creates a history instance with `maxPerChannel` possible slots
+func newMessageHistory(maxPerChannel int) *history {
+	return &history{
+		maxPerChannel: maxPerChannel,
+		chans:         map[string]*chanHistory{},
+	}
+}
+
+func (mh *history) channel(id string) *chanHistory {
+	ch, ok := mh.chans[id]
+	if !ok {
+		ch = &chanHistory{
+			msgs: make([]*message, 0, mh.maxPerChannel),
+		}
+		mh.chans[id] = ch
 	}
 
+	return ch
+}
+
+func (mh *history) Add(msg *message) *message {
 	mh.mu.Lock()
 	defer mh.mu.Unlock()
 
-	ch, ok := mh.chans[replyTo.ChannelID]
-	if !ok {
-		ch = &chanHistory{
-			msgs: make([]*message, 0, mh.max),
-		}
-		mh.chans[replyTo.ChannelID] = ch
+	if msg.ReplyTo != nil {
+		return mh.addReply(msg)
+	} else if msg.Message != nil {
+		return mh.addMessage(msg)
 	}
 
+	panic("invalid message")
+}
+
+func (mh *history) addReply(msg *message) *message {
+	ch := mh.channel(msg.ReplyTo.ChannelID)
+
+	// check if the message already exists, and cancel the old one
 	for i, e := range ch.msgs {
-		if e.ReplyTo.ID == replyTo.ID {
-			m.Sent = e.Sent
-			e.mu.Lock()
+		if e.ReplyTo.ID == msg.ReplyTo.ID {
+			e.Lock()
+			msg.Sent = e.Sent
+			msg.Message = e.Message
 			e.removed = true
-			e.mu.Unlock()
-			ch.msgs[i] = m
-			return m
+			e.cancel()
+			e.Unlock()
+
+			ch.msgs[i] = msg
+			return e
 		}
 	}
 
-	if len(ch.msgs) < mh.max {
+	addHistory(mh, ch, msg)
+	return nil
+}
+
+func (mh *history) addMessage(msg *message) *message {
+	ch := mh.channel(msg.Sent.ChannelID)
+
+	// check if the message already exists, and cancel the old one
+	for i, e := range ch.msgs {
+		if e.Sent.ID == msg.Sent.ID {
+			e.Lock()
+			msg.ReplyTo = e.ReplyTo
+			msg.Message = e.Message
+			e.removed = true
+			e.cancel()
+			e.Unlock()
+
+			ch.msgs[i] = msg
+			return e
+		}
+	}
+
+	addHistory(mh, ch, msg)
+	return nil
+}
+
+func addHistory(mh *history, ch *chanHistory, m *message) {
+	if len(ch.msgs) < mh.maxPerChannel {
 		ch.msgs = append(ch.msgs, m)
-		return m
+		return
 	}
 
 	ch.msgs[ch.no] = m
-	ch.no = (ch.no + 1) % mh.max
-	return m
+	ch.no = (ch.no + 1) % mh.maxPerChannel
 }
 
-func (mh *msgHistory) GetMessage(chanID, id string) *message {
+func (mh *history) GetMessage(chanID, id string) *message {
 	mh.mu.Lock()
 	defer mh.mu.Unlock()
 
@@ -83,9 +127,9 @@ func (mh *msgHistory) GetMessage(chanID, id string) *message {
 	}
 
 	for _, m := range ch.msgs {
-		m.mu.Lock()
+		m.Lock()
 		mID := m.Sent.ID
-		m.mu.Unlock()
+		m.Unlock()
 		if mID == id {
 			return m
 		}
@@ -94,7 +138,7 @@ func (mh *msgHistory) GetMessage(chanID, id string) *message {
 	return nil
 }
 
-//func (mh *msgHistory) GetReplyTo(chanID, id string) *message {
+//func (mh *history) GetReplyTo(chanID, id string) *message {
 //	mh.mu.Lock()
 //	defer mh.mu.Unlock()
 //

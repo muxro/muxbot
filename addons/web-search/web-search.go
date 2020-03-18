@@ -24,25 +24,28 @@ func (_ WebSearch) Add(b *bot.Bot) error {
 	b.RegisterCommand(&cli.Command{
 		Name:    "search",
 		Aliases: []string{"google", "g"},
+		Usage:   "search the web",
 		Action:  bot.CommandHandler(findWebPage),
 	})
 
 	b.RegisterCommand(&cli.Command{
 		Name:    "images",
 		Aliases: []string{"image", "img", "gis"},
+		Usage:   "search the web for an image",
 		Action:  bot.CommandHandler(findImage),
 	})
 
 	b.RegisterCommand(&cli.Command{
 		Name:    "videos",
 		Aliases: []string{"video", "vid", "yt"},
+		Usage:   "search the web for a video",
 		Action:  bot.CommandHandler(findVideo),
 	})
 
 	return nil
 }
 
-func findWebPage(q string) (string, error) {
+func findWebPage(q string) (bot.Message, error) {
 	url := "https://www.dogpile.com/serp?qc=web&q=" + url.QueryEscape(q)
 	doc, err := scrapeWeb(url)
 	if err != nil {
@@ -59,7 +62,7 @@ func findWebPage(q string) (string, error) {
 	return fmt.Sprintf("%s -- %s", resURL, resDesc), nil
 }
 
-func findImage(q string) (string, error) {
+func findImage(q string) (bot.Message, error) {
 	url := "https://www.dogpile.com/serp?qc=images&q=" + url.QueryEscape(q)
 	doc, err := scrapeWeb(url)
 	if err != nil {
@@ -75,7 +78,7 @@ func findImage(q string) (string, error) {
 	return url, nil
 }
 
-func findVideo(q string) (string, error) {
+func findVideo(q string) (bot.Message, error) {
 	url := "https://www.dogpile.com/serp?qc=video&q=" + url.QueryEscape(q)
 	doc, err := scrapeWeb(url)
 	if err != nil {
